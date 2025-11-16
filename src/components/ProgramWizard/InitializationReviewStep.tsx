@@ -16,7 +16,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { Button } from "../ui/button";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 
 interface InitializationReviewStepProps {
   onBack: () => void;

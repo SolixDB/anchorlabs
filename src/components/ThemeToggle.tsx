@@ -8,18 +8,20 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { IconMoon, IconSun } from "@tabler/icons-react";
 import { useTheme } from "next-themes";
+import Image from "next/image";
 import * as React from "react";
+import Solana from "../../public/solana.svg"
 
-function IconSolana(props: React.ImgHTMLAttributes<HTMLImageElement>) {
+function IconSolana({ className }: { className?: string }) {
   return (
-    <img
-      src="/solana.svg"
-      alt="Solana"
-      width="20"
-      height="20"
-      className="size-5"
-      {...props}
-    />
+    <div className={className}>
+      <Image
+        src={Solana}
+        alt="Solana"
+        width={20}
+        height={20}
+      />
+    </div>
   );
 }
 
@@ -80,8 +82,8 @@ export function ThemeToggle() {
               key={t.value}
               onClick={() => handleThemeChange(t.value)}
               className={`w-full flex items-center gap-2.5 px-2 py-1.5 text-sm rounded-sm transition-colors cursor-pointer ${isSelected
-                  ? "bg-accent text-accent-foreground font-medium"
-                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                ? "bg-accent text-accent-foreground font-medium"
+                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                 }`}
             >
               {ThemeIcon === IconSolana ? (

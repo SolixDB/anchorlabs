@@ -22,7 +22,6 @@ import {
   SidebarGroupContent,
 } from "@/components/ui/sidebar";
 import { syne } from "@/fonts/fonts";
-import { WrenchIcon } from "lucide-react";
 
 // Navigation configuration
 const NAV_ITEMS = [

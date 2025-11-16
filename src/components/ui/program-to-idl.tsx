@@ -56,7 +56,7 @@ export default function ProgramToIdl({
       };
       fetchProgramIDL();
     }
-  }, [programAddress, isValidProgramAddress, setInputMethod, setJsonData]);
+  }, [programAddress, isValidProgramAddress, setInputMethod, setJsonData, getProgramIDL]);
 
   return (
     <motion.div

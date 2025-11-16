@@ -29,7 +29,7 @@ export interface PDASeeds {
 }
 
 export interface TestGeneratorInput {
-  idl: any; // Anchor IDL object
+  idl: Record<string, unknown>; // Anchor IDL object
   seeds: PDASeeds;
   context?: {
     tokenProgram?: 'spl-token' | 'spl-token-2022' | null;
@@ -64,7 +64,7 @@ export interface GenerateTestOptions {
 export class AnchorTestGenerator {
   private readonly systemPrompt: string;
   private genAI: GoogleGenerativeAI | null = null;
-  private model: any = null;
+  private model: ReturnType<GoogleGenerativeAI['getGenerativeModel']> | null = null;
 
   constructor(apiKey?: string) {
     this.systemPrompt = ANCHOR_TEST_GENERATOR_PROMPT;
@@ -93,7 +93,7 @@ export class AnchorTestGenerator {
   /**
    * Extract IDL from programStore
    */
-  private getIdlFromStore(): any {
+  private getIdlFromStore(): Record<string, unknown> {
     const { programDetails } = useProgramStore.getState();
 
     if (!programDetails) {
@@ -185,9 +185,11 @@ export class AnchorTestGenerator {
       const formattedInput = this.formatInput(input);
 
       console.log('📤 Sending request to Gemini...');
-      console.log('   Program:', idl.metadata?.name || idl.name);
-      console.log('   Instructions:', idl.instructions?.length || 0);
-      console.log('   PDAs:', Object.keys(options.seeds).length);
+      const programName = (idl as any).metadata?.name ?? (idl as any).name ?? 'Unknown';
+      const instructionsCount = Array.isArray((idl as any).instructions) ? (idl as any).instructions.length : 0;
+      console.log('   Program:', programName);
+      console.log('   Instructions:', instructionsCount);
+      console.log('   PDAs:', Object.keys(options.seeds || {}).length);
 
       // Call Gemini API
       const result = await this.model.generateContent([

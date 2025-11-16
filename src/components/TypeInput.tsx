@@ -35,7 +35,7 @@ export function TypeInput({
     try {
       const pubkey = new PublicKey(e.target.value);
       onChange(pubkey.toString());
-    } catch (_) {
+    } catch {
       onChange(e.target.value);
     }
   };

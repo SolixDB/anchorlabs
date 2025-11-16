@@ -20,31 +20,37 @@ export function JsonEditor({ onChange }: JsonEditorProps) {
     if (jsonData !== code) {
       setCode(jsonData);
     }
-  }, [jsonData]);
+  }, [jsonData, code]);
 
   // Validate JSON and update store
   useEffect(() => {
+    let currentIsValid = true;
+    let currentErrorMessage = "";
+    
     try {
       if (code.trim()) {
         JSON.parse(code);
-        setIsValid(true);
-        setErrorMessage("");
+        currentIsValid = true;
+        currentErrorMessage = "";
       } else {
         // Empty is considered valid
-        setIsValid(true);
-        setErrorMessage("");
+        currentIsValid = true;
+        currentErrorMessage = "";
       }
     } catch (error) {
-      setIsValid(false);
-      setErrorMessage((error as Error).message);
+      currentIsValid = false;
+      currentErrorMessage = (error as Error).message;
     }
+
+    setIsValid(currentIsValid);
+    setErrorMessage(currentErrorMessage);
 
     // Update store
     setJsonData(code);
 
     // Call onChange if provided
     if (onChange) {
-      onChange(code, isValid);
+      onChange(code, currentIsValid);
     }
   }, [code, onChange, setIsValid, setJsonData]);
 

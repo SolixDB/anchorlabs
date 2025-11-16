@@ -39,7 +39,7 @@ export default function TestGeneration() {
   const [specialReqs, setSpecialReqs] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedCode, setGeneratedCode] = useState("");
-  const [dependencies, setDependencies] = useState<any>(null);
+  const [dependencies, setDependencies] = useState<{ required: string[]; optional: string[] } | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
 
@@ -52,7 +52,7 @@ export default function TestGeneration() {
     setCurrentSeeds([...currentSeeds, { type: "string", value: "" }]);
   };
 
-  const updateSeed = (index: number, field: keyof SeedDefinition, value: any) => {
+  const updateSeed = (index: number, field: keyof SeedDefinition, value: string | number) => {
     const newSeeds = [...currentSeeds];
     newSeeds[index] = { ...newSeeds[index], [field]: value };
     setCurrentSeeds(newSeeds);
@@ -284,7 +284,7 @@ export default function TestGeneration() {
                   <Select
                     value={tokenProgram || "none"}
                     onValueChange={(value) =>
-                      setTokenProgram(value === "none" ? null : value as any)
+                      setTokenProgram(value === "none" ? null : value as 'spl-token' | 'spl-token-2022')
                     }
                   >
                     <SelectTrigger>

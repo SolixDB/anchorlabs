@@ -123,7 +123,7 @@ export const SaveTestCaseDialog: React.FC<SaveTestCaseDialogProps> = ({
 
           <div className="space-y-2">
             <Label htmlFor="expected-outcome">Expected Outcome</Label>
-            <Select value={expectedOutcome} onValueChange={(v: any) => setExpectedOutcome(v)}>
+            <Select value={expectedOutcome} onValueChange={(v: "success" | "failure") => setExpectedOutcome(v)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

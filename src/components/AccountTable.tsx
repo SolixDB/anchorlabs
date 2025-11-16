@@ -215,11 +215,6 @@ export function AccountTable({ data, accountType }: AccountTableProps) {
           cell: ({ getValue }) => {
             const value = getValue();
             
-            // Check if this is an enum value
-            const rawValue = typeof value === "string" && value.includes(": ") 
-              ? value.split(": ")[0] 
-              : value;
-            
             const displayValue =
               typeof value === "object" && value !== null
                 ? JSON.stringify(value, null, 2)

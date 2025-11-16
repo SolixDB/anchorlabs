@@ -114,7 +114,7 @@ export default function NetworkConnectionStep({
       setRpcHealth(healthy ? "healthy" : "unhealthy");
     };
     check();
-  }, [selectedRpc, customRpcUrl]);
+  }, [selectedRpc, customRpcUrl, getCurrentRpcUrl]);
 
   const getHealthStatusDisplay = () => {
     switch (rpcHealth) {

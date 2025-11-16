@@ -127,17 +127,15 @@ export function AccountView({ data, accountType }: AccountViewProps) {
   const [viewMode, setViewMode] = useState<"card" | "table">("card");
   const [sorting, setSorting] = useState<SortingState>([]);
 
-  if (!accountType) {
-    return <div>No account type specified</div>;
-  }
-
-  const accountFields: IdlField[] =
-    accountType &&
-    accountType.type &&
-    accountType.type.kind === "struct" &&
-    Array.isArray(accountType.type.fields)
-      ? (accountType.type.fields as unknown[]).filter(isIdlField)
-      : [];
+  const accountFields: IdlField[] = useMemo(() => {
+    if (!accountType ||
+      !accountType.type ||
+      accountType.type.kind !== "struct" ||
+      !Array.isArray(accountType.type.fields)) {
+      return [];
+    }
+    return (accountType.type.fields as unknown[]).filter(isIdlField);
+  }, [accountType]);
 
   // Filter data
   const filteredData = data.filter((item) => {
@@ -150,33 +148,35 @@ export function AccountView({ data, accountType }: AccountViewProps) {
     });
   });
 
-  const formatFieldValue = (field: IdlField, value: unknown) => {
-    const fieldType = typeof field.type === "string" ? field.type : "";
-    switch (fieldType) {
-      case "pubkey":
-        return value?.toString() || "";
-      case "u64":
-      case "u32":
-      case "u16":
-      case "u8":
-      case "i64":
-      case "i32":
-      case "i16":
-      case "i8":
-        return value ? value.toString() : "0";
-      case "bool":
-        return value ? "Yes" : "No";
-      default:
-        if (typeof value === "object" && value !== null) {
-          const keys = Object.keys(value);
-          if (keys.length === 1) {
-            return formatEnumValue(value);
+  const formatFieldValue = useMemo(() => {
+    return (field: IdlField, value: unknown) => {
+      const fieldType = typeof field.type === "string" ? field.type : "";
+      switch (fieldType) {
+        case "pubkey":
+          return value?.toString() || "";
+        case "u64":
+        case "u32":
+        case "u16":
+        case "u8":
+        case "i64":
+        case "i32":
+        case "i16":
+        case "i8":
+          return value ? value.toString() : "0";
+        case "bool":
+          return value ? "Yes" : "No";
+        default:
+          if (typeof value === "object" && value !== null) {
+            const keys = Object.keys(value);
+            if (keys.length === 1) {
+              return formatEnumValue(value);
+            }
+            return JSON.stringify(value, null, 2);
           }
-          return JSON.stringify(value, null, 2);
-        }
-        return String(value ?? "");
-    }
-  };
+          return String(value ?? "");
+      }
+    };
+  }, []);
 
   const getFieldTypeColor = (fieldType: string) => {
     if (fieldType === "pubkey") return "bg-blue-500/10 text-blue-700 dark:text-blue-300";
@@ -287,7 +287,7 @@ export function AccountView({ data, accountType }: AccountViewProps) {
     });
 
     return [...baseColumns, ...dynamicColumns];
-  }, [accountFields]);
+  }, [accountFields, formatFieldValue]);
 
   const table = useReactTable({
     data: filteredData,
@@ -318,6 +318,10 @@ export function AccountView({ data, accountType }: AccountViewProps) {
     getPaginationRowModel: getPaginationRowModel(),
     autoResetPageIndex: false,
   });
+
+  if (!accountType) {
+    return <div>No account type specified</div>;
+  }
 
   const totalPages =
     viewMode === "table" ? table.getPageCount() : Math.ceil(filteredData.length / pageSize);

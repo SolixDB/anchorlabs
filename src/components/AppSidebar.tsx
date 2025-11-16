@@ -8,6 +8,7 @@ import {
   IconDashboard,
   IconDatabase,
   IconListDetails,
+  IconTestPipe,
 } from "@tabler/icons-react";
 
 import {
@@ -21,6 +22,7 @@ import {
   SidebarGroupContent,
 } from "@/components/ui/sidebar";
 import { syne } from "@/fonts/fonts";
+import { WrenchIcon } from "lucide-react";
 
 // Navigation configuration
 const NAV_ITEMS = [
@@ -40,6 +42,11 @@ const NAV_ITEMS = [
     icon: IconListDetails,
   },
   {
+    title: "Test Suites",
+    url: "/test-suites",
+    icon: IconTestPipe,
+  },
+  {
     title: "Transactions",
     url: "/transactions",
     icon: IconChartBar,
@@ -49,6 +56,11 @@ const NAV_ITEMS = [
     url: "/pda",
     icon: IconDatabase,
   },
+  // {
+  //   title: "Test Generation",
+  //   url: "/test-generation",
+  //   icon: WrenchIcon,
+  // },
 ] as const;
 
 // Main Sidebar Component

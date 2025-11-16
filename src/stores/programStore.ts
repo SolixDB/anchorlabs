@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { create, StateCreator } from "zustand";
 import { Program, Idl, AnchorProvider } from "@coral-xyz/anchor";
 import { Connection, Commitment, Cluster } from "@solana/web3.js";
 import { AnchorWallet } from "@jup-ag/wallet-adapter";
@@ -8,19 +8,12 @@ import { IdlType } from "@coral-xyz/anchor/dist/cjs/idl";
 type AnyProgram = Program<Idl>;
 type CommitmentLevel = Commitment;
 
-
 export interface IdlTypeDef {
   name: string;
   type: {
     kind: "struct" | "enum";
-    fields?: Array<{
-      name: string;
-      type: IdlType;
-    }>;
-    variants?: Array<{
-      name: string;
-      fields?: IdlType[];
-    }>;
+    fields?: Array<{ name: string; type: IdlType }>;
+    variants?: Array<{ name: string; fields?: IdlType[] }>;
   };
   docs?: string[];
 }
@@ -50,20 +43,18 @@ export interface ProgramState {
   isReinitializing: boolean;
   error: ProgramError | null;
   programDetails: ProgramDetails | null;
-
   initialize: (
     idl: Idl,
     rpcUrl: string,
     wallet: AnchorWallet,
     commitment?: CommitmentLevel
   ) => Promise<AnyProgram | null>;
-
   reinitialize: (wallet: AnchorWallet) => Promise<AnyProgram | null>;
+  updateRpcUrl: (rpcUrl: string, wallet: AnchorWallet) => Promise<boolean>;
   reset: () => void;
 }
 
 const DEFAULT_COMMITMENT: CommitmentLevel = "confirmed";
-
 const CONNECTION_CONFIG = {
   commitment: DEFAULT_COMMITMENT,
   confirmTransactionInitialTimeout: 30000,
@@ -71,10 +62,13 @@ const CONNECTION_CONFIG = {
 
 function detectCluster(rpcUrl: string): Cluster | string {
   const url = rpcUrl.toLowerCase();
+  
+  // Check in order of specificity to avoid false matches
   if (url.includes("devnet")) return "devnet";
   if (url.includes("testnet")) return "testnet";
-  if (url.includes("mainnet")) return "mainnet-beta";
+  if (url.includes("mainnet-beta") || url.includes("mainnet")) return "mainnet-beta";
   if (url.includes("localhost") || url.includes("127.0.0.1")) return "localnet";
+  
   return "custom";
 }
 
@@ -86,7 +80,6 @@ function createErrorObject(error: unknown, defaultName: string): ProgramError {
       stack: error.stack,
     };
   }
-
   return {
     name: defaultName,
     message: typeof error === "string" ? error : String(error),
@@ -137,7 +130,9 @@ const useProgramStore = create<ProgramState>()(
             commitment,
             initializedAt: Date.now(),
             serializedIdl: JSON.stringify(idl),
-            types: (idl.types ? JSON.parse(JSON.stringify(idl.types)) : []) as IdlTypeDef[],
+            types: (idl.types
+              ? JSON.parse(JSON.stringify(idl.types))
+              : []) as IdlTypeDef[],
           };
 
           set({
@@ -148,12 +143,10 @@ const useProgramStore = create<ProgramState>()(
             programDetails,
           });
 
-          console.log("✓ Program initialized:", programDetails.name);
           return program;
         } catch (error) {
           const errorObj = createErrorObject(error, "InitializationError");
           console.error("✗ Program initialization failed:", errorObj);
-
           set({
             error: errorObj,
             isInitialized: false,
@@ -162,7 +155,6 @@ const useProgramStore = create<ProgramState>()(
             connection: null,
             programDetails: null,
           });
-
           throw new Error(errorObj.message);
         }
       },
@@ -182,7 +174,6 @@ const useProgramStore = create<ProgramState>()(
 
         try {
           set({ isReinitializing: true });
-          console.log("↻ Reinitializing program...");
 
           const idl: Idl = JSON.parse(programDetails.serializedIdl);
           const program = await get().initialize(
@@ -192,17 +183,64 @@ const useProgramStore = create<ProgramState>()(
             programDetails.commitment
           );
 
-          console.log("✓ Program reinitialized successfully");
           return program;
         } catch (error) {
           const errorObj = createErrorObject(error, "ReinitializationError");
           console.error("✗ Reinitialization failed:", errorObj);
-
           get().reset();
           set({ error: errorObj });
           throw new Error(errorObj.message);
         } finally {
           set({ isReinitializing: false });
+        }
+      },
+
+      updateRpcUrl: async (rpcUrl: string, wallet: AnchorWallet): Promise<boolean> => {
+        const { programDetails } = get();
+
+        if (!programDetails) {
+          console.warn("⚠ No program details found for RPC update");
+          return false;
+        }
+
+        if (programDetails.rpcUrl === rpcUrl) {
+          return true;
+        }
+
+        try {
+
+          const idl: Idl = JSON.parse(programDetails.serializedIdl);
+          const connection = new Connection(rpcUrl, {
+            ...CONNECTION_CONFIG,
+            commitment: programDetails.commitment,
+          });
+          
+          const provider = new AnchorProvider(connection, wallet, {
+            preflightCommitment: programDetails.commitment,
+            commitment: programDetails.commitment,
+          });
+          
+          const program = new Program(idl, provider);
+
+          const updatedDetails: ProgramDetails = {
+            ...programDetails,
+            rpcUrl,
+            cluster: detectCluster(rpcUrl),
+          };
+
+          set({
+            program,
+            provider,
+            connection,
+            programDetails: updatedDetails,
+          });
+
+          return true;
+        } catch (error) {
+          const errorObj = createErrorObject(error, "RpcUpdateError");
+          console.error("✗ RPC update failed:", errorObj);
+          set({ error: errorObj });
+          return false;
         }
       },
 
@@ -215,18 +253,16 @@ const useProgramStore = create<ProgramState>()(
           programDetails: null,
           error: null,
         });
-        console.log("↺ Program store reset");
       },
     }),
     {
       name: "anchor-studio-program",
-      partialize: (state) =>
-      ({
+      partialize: (state: ProgramState): PersistedState => ({
         programDetails: state.programDetails,
         isInitialized: state.isInitialized,
-      } as PersistedState),
+      }),
     }
-  )
+  ) as unknown as StateCreator<ProgramState, [], [never, unknown][]>
 );
 
 export default useProgramStore;

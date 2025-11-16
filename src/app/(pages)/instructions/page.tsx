@@ -1,10 +1,23 @@
 "use client";
 
+import { useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
+import { Connection } from "@solana/web3.js";
+import { AnimatePresence, motion } from "framer-motion";
+import { Code, Loader2, Rocket, Terminal, WalletIcon, Zap, Save, Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { AccountInput } from "@/components/instruction/AccountInput";
+import { ArgumentInput } from "@/components/instruction/ArgumentInput";
+import {
+  ErrorToast,
+  SuccessToast,
+} from "@/components/instruction/NotificationToasts";
 import ProgramNotFound from "@/components/ProgramNotFound";
-import { getExplorerUrl } from "@/components/TransactionTable";
-import { TypeInput } from "@/components/TypeInput";
+import { RPCSelector } from "@/components/RPCSelector";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
@@ -12,10 +25,21 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -25,40 +49,15 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useAutoReinitialize } from "@/hooks/useAutoReinitialize";
+import { useInstructionForm } from "@/hooks/useInstructionForm";
+import { usePDAManager } from "@/hooks/usePDAManager";
 import useProgramStore from "@/stores/programStore";
-import { BN } from "@coral-xyz/anchor";
-import {
-  IdlInstruction,
-  IdlType
-} from "@coral-xyz/anchor/dist/cjs/idl";
-import { useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
-import { Connection, PublicKey } from "@solana/web3.js";
-import {
-  CheckCircle2,
-  Code,
-  Copy,
-  ExternalLink,
-  Hash,
-  Loader2,
-  Rocket,
-  Terminal,
-  Wallet as WalletIcon,
-  XCircle,
-  Zap
-} from "lucide-react";
-import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { motion, AnimatePresence } from "framer-motion";
-
-type SeedType = "string" | "publicKey" | "u64" | "u32" | "u16" | "u8";
-
-interface SeedInput {
-  id: string;
-  type: SeedType;
-  value: string;
-  label: string;
-}
+import useTestSuiteStore from "@/stores/testSuiteStore";
+import { TransactionResult } from "@/types";
+import { resolveType } from "@/utils/argProcessor";
+import { formatInstructionName, formatInstructions } from "@/utils/instructionUtils";
+import { executeTransaction } from "@/utils/transactionExecutor";
+import { isFormValid } from "@/utils/validationUtils";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -71,74 +70,85 @@ const containerVariants = {
   },
 };
 
+function detectClusterFromUrl(rpcUrl: string): string {
+  const url = rpcUrl.toLowerCase();
+  
+  if (url.includes("devnet")) return "devnet";
+  if (url.includes("testnet")) return "testnet";
+  if (url.includes("mainnet-beta") || url.includes("mainnet")) return "mainnet-beta";
+  if (url.includes("localhost") || url.includes("127.0.0.1")) return "localnet";
+  
+  return "custom";
+}
+
 export default function InstructionBuilderPage() {
   const { program, programDetails } = useProgramStore();
+  const { suites, addTestCase, createSuite } = useTestSuiteStore();
   const wallet = useAnchorWallet();
   useAutoReinitialize(wallet);
   const { publicKey, sendTransaction } = useWallet();
-  const connection = useMemo(() => {
-    if (programDetails) {
-      return new Connection(programDetails.rpcUrl);
-    }
-  }, [programDetails]);
-  const [selectedIx, setSelectedIx] = useState<string>("");
 
-  const [args, setArgs] = useState<Record<string, unknown>>({});
-  const [accounts, setAccounts] = useState<Record<string, string>>({});
+  // Separate RPC state for instruction execution
+  const [executionRpcUrl, setExecutionRpcUrl] = useState<string>("");
+
+  // Initialize execution RPC from program details
+  useEffect(() => {
+    if (programDetails && !executionRpcUrl) {
+      setExecutionRpcUrl(programDetails.rpcUrl);
+    }
+  }, [programDetails, executionRpcUrl]);
+
+  // Connection for instruction execution (separate from program connection)
+  const executionConnection = useMemo(() => {
+    if (executionRpcUrl) {
+      return new Connection(executionRpcUrl);
+    }
+    return null;
+  }, [executionRpcUrl]);
+
+  const [selectedIx, setSelectedIx] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<{ signature: string } | null>(null);
+  const [result, setResult] = useState<TransactionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [showError, setShowError] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [testCaseName, setTestCaseName] = useState("");
+  const [selectedSuiteForSave, setSelectedSuiteForSave] = useState<string>("");
 
-  // PDA States
-  const [pdaDialogOpen, setPdaDialogOpen] = useState<string | null>(null);
-  const [pdaSeeds, setPdaSeeds] = useState<SeedInput[]>([
-    { id: "1", type: "string", value: "", label: "Seed 1" },
-  ]);
-
-  // Get instructions from the program IDL
   const instructions = program?.idl?.instructions;
-  // Format instruction names for better display
-  const formattedInstructions = useMemo(() => {
-    return instructions
-      ? instructions.map((ix) => ({
-        ...ix,
-        displayName:
-          ix.name.charAt(0).toUpperCase() +
-          ix.name.slice(1).replace(/_/g, " "),
-      }))
-      : [];
-  }, [instructions]);
+  const formattedInstructions = useMemo(
+    () => (instructions ? formatInstructions(instructions) : []),
+    [instructions]
+  );
 
-  const instruction = useMemo(() => {
-    return instructions?.find((ix) => ix.name === selectedIx);
-  }, [instructions, selectedIx]);
+  const instruction = useMemo(
+    () => instructions?.find((ix) => ix.name === selectedIx),
+    [instructions, selectedIx]
+  );
 
-  const areArgsValid = useMemo(() => {
-    if (!instruction) return false;
-    return instruction.args.every(
-      (arg) => args[arg.name] !== undefined && args[arg.name] !== ""
-    );
-  }, [args, instruction]);
+  const { args, accounts, handleArgChange, handleAccountChange } =
+    useInstructionForm({
+      instruction,
+      programTypes: programDetails?.types,
+    });
 
-  const areAccountsValid = useMemo(() => {
-    if (!instruction) return false;
-    const requiredAccounts = instruction.accounts.filter(
-      (acc) => !("optional" in acc && acc.optional)
-    );
-    return requiredAccounts.every(
-      (acc) => accounts[acc.name] !== undefined && accounts[acc.name] !== ""
-    );
-  }, [accounts, instruction]);
+  const pdaManager = usePDAManager({
+    program,
+    onAccountChange: handleAccountChange,
+  });
 
-  const isFormValid = areArgsValid && areAccountsValid;
+  const formValid = isFormValid(instruction, args, accounts);
 
-  const initialSelectedIx = useMemo(() => {
-    return formattedInstructions.length > 0
-      ? formattedInstructions[0].name
-      : "";
-  }, [formattedInstructions]);
+  // Get suites for current program
+  const currentProgramSuites = suites.filter(
+    (s) => s.programId === programDetails?.programId
+  );
+
+  const initialSelectedIx = useMemo(
+    () => (formattedInstructions.length > 0 ? formattedInstructions[0].name : ""),
+    [formattedInstructions]
+  );
 
   useEffect(() => {
     if (initialSelectedIx && !selectedIx) {
@@ -146,133 +156,68 @@ export default function InstructionBuilderPage() {
     }
   }, [initialSelectedIx, selectedIx]);
 
-  const processArgs = useCallback(
-    (currentArgs: Record<string, unknown>, ix: IdlInstruction) => {
-      return ix.args.map((arg) => {
-        const value = currentArgs[arg.name];
-
-        // Handle enum types - they're already in correct format { VariantName: {} }
-        if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-          // Check if it's an enum object (has a single key with empty object value)
-          const keys = Object.keys(value);
-          if (keys.length === 1 && typeof value[keys[0] as keyof typeof value] === "object") {
-            return value; // Return enum as-is
-          }
-        }
-
-        if (typeof arg.type === "string") {
-          switch (arg.type) {
-            case "u8":
-            case "i8":
-            case "u16":
-            case "i16":
-            case "u32":
-            case "i32":
-            case "u64":
-            case "i64":
-            case "u128":
-            case "i128":
-            case "u256":
-            case "i256":
-              return value ? new BN(value) : new BN(0);
-            case "pubkey":
-              return value ? new PublicKey(value as string) : null;
-            default:
-              return value;
-          }
-        }
-
-        // Handle option types
-        if (typeof arg.type === "object" && "option" in arg.type) {
-          if (!value || value === "") return null;
-
-          // If option wraps a number type, convert it
-          if (typeof arg.type.option === "string") {
-            const optionType = arg.type.option;
-            if (["u8", "i8", "u16", "i16", "u32", "i32", "u64", "i64", "u128", "i128", "u256", "i256"].includes(optionType)) {
-              return new BN(value);
-            }
-            if (optionType === "pubkey") {
-              return new PublicKey(value as string);
-            }
-          }
-
-          return value;
-        }
-
-        return value;
+  const handleRpcChange = async (newRpcUrl: string) => {
+    try {
+      // Just update the local execution RPC, don't touch program connection
+      setExecutionRpcUrl(newRpcUrl);
+      
+      const newCluster = detectClusterFromUrl(newRpcUrl);
+      
+      toast.success("Execution RPC Updated!", {
+        description: `Instructions will now execute on ${newCluster} network`,
       });
-    },
-    []
-  );
-
-  // Reset form when instruction changes
-  useEffect(() => {
-    if (instruction) {
-      const resolveType = (type: IdlType): IdlType | { kind: "struct" | "enum"; fields?: Array<{ name: string; type: unknown }>; variants?: Array<{ name: string; fields?: unknown[] }> } => {
-        if (typeof type === "object" && "option" in type) {
-          type = type.option;
-        }
-        if (typeof type === "object" && "defined" in type) {
-          let typeName: string;
-          if (typeof type.defined === "string") {
-            typeName = type.defined;
-          } else if (typeof type.defined === "object" && "name" in type.defined) {
-            typeName = type.defined.name;
-          } else {
-            return type;
-          }
-          const definedType = programDetails?.types?.find(
-            (t) => t.name.toLowerCase() === typeName.toLowerCase()
-          );
-          return definedType?.type || type;
-        }
-        return type;
-      };
-
-      // Initialize args with default values
-      const initialArgs: Record<string, unknown> = {};
-      instruction.args.forEach((arg) => {
-        const resolvedType = resolveType(arg.type);
-        const isEnum = typeof resolvedType === "object" &&
-          "kind" in resolvedType &&
-          resolvedType.kind === "enum";
-
-        if (isEnum && resolvedType.variants && resolvedType.variants.length > 0) {
-          const firstVariant = resolvedType.variants[0].name;
-          // Convert PascalCase to camelCase
-          const camelCaseVariant = firstVariant.charAt(0).toLowerCase() + firstVariant.slice(1);
-          initialArgs[arg.name] = { [camelCaseVariant]: {} };
-        } else {
-          initialArgs[arg.name] = "";
-        }
+    } catch (err) {
+      console.error("RPC update error:", err);
+      toast.error("RPC Update Error", {
+        description: err instanceof Error ? err.message : "Unknown error occurred",
       });
-      setArgs(initialArgs);
-
-      // Initialize accounts with empty values
-      const initialAccounts: Record<string, string> = {};
-      instruction.accounts.forEach((acc) => {
-        initialAccounts[acc.name] = "";
-      });
-      setAccounts(initialAccounts);
     }
-  }, [selectedIx, instruction, programDetails]);
-
-  const handleArgChange = (name: string, value: unknown) => {
-    const newArgs = {
-      ...args,
-      [name]: value,
-    };
-    setArgs(newArgs);
   };
 
-  const handleAccountChange = (name: string, value: string) => {
-    setAccounts((prev) => ({ ...prev, [name]: value }));
+  const handleSaveTestCase = () => {
+    if (!testCaseName.trim()) {
+      toast.error("Please enter a test case name");
+      return;
+    }
+
+    if (!instruction) {
+      toast.error("No instruction selected");
+      return;
+    }
+
+    let suiteId = selectedSuiteForSave;
+
+    // Create new suite if "new" is selected
+    if (selectedSuiteForSave === "new") {
+      suiteId = createSuite("New Test Suite", programDetails?.programId || "");
+    }
+
+    if (!suiteId) {
+      toast.error("Please select or create a suite");
+      return;
+    }
+
+    // Add test case to suite
+    addTestCase(suiteId, {
+      name: testCaseName,
+      instruction: instruction.name,
+      args,
+      accounts,
+    });
+
+    toast.success("Test case saved!", {
+      description: `Added to suite successfully`,
+    });
+
+    // Reset dialog
+    setTestCaseName("");
+    setSelectedSuiteForSave("");
+    setSaveDialogOpen(false);
   };
 
   const handleSubmit = async () => {
-    if (!program || !instruction || !publicKey || !connection) {
-      setError("Program, instruction, or wallet not available");
+    if (!program || !instruction || !publicKey || !executionConnection) {
+      setError("Program, instruction, wallet, or connection not available");
       return;
     }
 
@@ -281,186 +226,18 @@ export default function InstructionBuilderPage() {
     setResult(null);
 
     try {
-      // Helper function to resolve defined types
-      const resolveType = (type: IdlType): IdlType | { kind: "struct" | "enum"; fields?: Array<{ name: string; type: unknown }>; variants?: Array<{ name: string; fields?: unknown[] }> } => {
-        if (typeof type === "object" && "option" in type) {
-          type = type.option;
-        }
-        if (typeof type === "object" && "defined" in type) {
-          let typeName: string;
-          if (typeof type.defined === "string") {
-            typeName = type.defined;
-          } else if (typeof type.defined === "object" && "name" in type.defined) {
-            typeName = type.defined.name;
-          } else {
-            return type;
-          }
-          const definedType = programDetails?.types?.find(
-            (t) => t.name.toLowerCase() === typeName.toLowerCase()
-          );
-          return definedType?.type || type;
-        }
-        return type;
-      };
-
-      // 1. Prepare arguments with proper enum handling
-      const processedArgs = instruction.args.map((arg) => {
-        const value = args[arg.name];
-
-        console.log(`Processing arg: ${arg.name}`, { value, type: arg.type });
-
-        // Resolve the actual type (handles 'defined' types)
-        const resolvedType = resolveType(arg.type);
-
-        // Check if this is an enum type
-        const isEnum = typeof resolvedType === "object" &&
-          "kind" in resolvedType &&
-          resolvedType.kind === "enum";
-
-        // If it's an enum, ensure it's in the correct format
-        if (isEnum) {
-          if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-            const keys = Object.keys(value);
-            // Must be in format { VariantName: {} }
-            if (keys.length === 1) {
-              const variantName = keys[0];
-              const variantValue = value[variantName as keyof typeof value];
-
-              // Ensure the variant value is an object (even if empty)
-              const result = {
-                [variantName]: typeof variantValue === 'object' && variantValue !== null
-                  ? variantValue
-                  : {}
-              };
-
-              console.log(`Enum ${arg.name} formatted:`, result);
-              return result;
-            }
-          }
-          throw new Error(`Invalid enum value for ${arg.name}. Expected format: { VariantName: {} }`);
-        }
-
-        // Handle option types (check original type, not resolved)
-        if (typeof arg.type === "object" && "option" in arg.type) {
-          if (!value || value === "") return null;
-
-          // Get the inner type
-          const innerType = arg.type.option;
-
-          if (typeof innerType === "string") {
-            switch (innerType) {
-              case "u8":
-              case "i8":
-              case "u16":
-              case "i16":
-              case "u32":
-              case "i32":
-              case "u64":
-              case "i64":
-              case "u128":
-              case "i128":
-              case "u256":
-              case "i256":
-                return new BN(value);
-              case "pubkey":
-                return new PublicKey(value as string);
-              default:
-                return value;
-            }
-          }
-
-          return value;
-        }
-
-        // Handle primitive types
-        if (typeof arg.type === "string") {
-          switch (arg.type) {
-            case "u8":
-            case "i8":
-            case "u16":
-            case "i16":
-            case "u32":
-            case "i32":
-            case "u64":
-            case "i64":
-            case "u128":
-            case "i128":
-            case "u256":
-            case "i256":
-              return value ? new BN(value) : new BN(0);
-            case "pubkey":
-              return value ? new PublicKey(value as string) : null;
-            case "bool":
-              return Boolean(value);
-            case "string":
-              return value || "";
-            default:
-              return value;
-          }
-        }
-
-        // Handle vec types
-        if (typeof arg.type === "object" && "vec" in arg.type) {
-          if (!value) return [];
-          if (Array.isArray(value)) return value;
-          return [value];
-        }
-
-        // Default: return as-is
-        return value;
+      const txResult = await executeTransaction({
+        program,
+        instruction,
+        args,
+        accounts,
+        connection: executionConnection, // Use the separate execution connection
+        publicKey,
+        sendTransaction,
+        programTypes: programDetails?.types,
       });
 
-      console.log("Final processed args:", processedArgs);
-
-      // 2. Create method builder with args
-      const methodBuilder = program.methods[instruction.name](...processedArgs);
-
-      // 3. Resolve accounts
-      const accountsObject: Record<string, PublicKey> = {};
-
-      // 4. Add any accounts that were provided manually
-      for (const [name, value] of Object.entries(accounts)) {
-        if (value) {
-          try {
-            accountsObject[name] = new PublicKey(value);
-          } catch (err) {
-            console.warn(`Invalid public key for account ${name}:`, err);
-            throw new Error(`Invalid public key for account "${name}": ${value}`);
-          }
-        }
-      }
-
-      console.log("Accounts object:", accountsObject);
-
-      // 5. Build transaction
-      const transaction = await methodBuilder
-        .accounts(accountsObject)
-        .transaction();
-
-      // Get recent blockhash
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
-
-      // 6. Send transaction through wallet for user signature
-      const txSignature = await sendTransaction(transaction, connection, {
-        skipPreflight: false,
-      });
-
-      console.log("Transaction sent with signature:", txSignature);
-
-      // 7. Confirm the transaction
-      const confirmation = await connection.confirmTransaction({
-        signature: txSignature,
-        blockhash,
-        lastValidBlockHeight,
-      });
-
-      if (confirmation.value.err) {
-        throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
-      }
-
-      setResult({ signature: txSignature });
+      setResult(txResult);
       setShowResult(true);
       toast.success("Transaction sent", {
         description: "Your transaction was successfully sent to the network.",
@@ -476,95 +253,6 @@ export default function InstructionBuilderPage() {
       }
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  // Add these functions before the return statement
-  const addPdaSeed = () => {
-    setPdaSeeds([
-      ...pdaSeeds,
-      {
-        id: Date.now().toString(),
-        type: "string",
-        value: "",
-        label: `Seed ${pdaSeeds.length + 1}`,
-      },
-    ]);
-  };
-
-  const removePdaSeed = (id: string) => {
-    if (pdaSeeds.length > 1) {
-      setPdaSeeds(pdaSeeds.filter((s) => s.id !== id));
-    }
-  };
-
-  const updatePdaSeed = (id: string, field: keyof SeedInput, value: string) => {
-    setPdaSeeds(
-      pdaSeeds.map((s) => (s.id === id ? { ...s, [field]: value } : s))
-    );
-  };
-
-  const derivePDAForAccount = (accountName: string) => {
-    if (!program) return;
-
-    try {
-      const seedBuffers: Buffer[] = [];
-
-      for (const seed of pdaSeeds) {
-        if (!seed.value.trim()) {
-          throw new Error(`${seed.label} cannot be empty`);
-        }
-
-        switch (seed.type) {
-          case "string":
-            seedBuffers.push(Buffer.from(seed.value));
-            break;
-          case "publicKey":
-            const pubkey = new PublicKey(seed.value);
-            seedBuffers.push(pubkey.toBuffer());
-            break;
-          case "u64": {
-            const num = BigInt(seed.value);
-            const buf = Buffer.alloc(8);
-            buf.writeBigUInt64LE(num);
-            seedBuffers.push(buf);
-            break;
-          }
-          case "u32": {
-            const num = parseInt(seed.value);
-            const buf = Buffer.alloc(4);
-            buf.writeUInt32LE(num);
-            seedBuffers.push(buf);
-            break;
-          }
-          case "u16": {
-            const num = parseInt(seed.value);
-            const buf = Buffer.alloc(2);
-            buf.writeUInt16LE(num);
-            seedBuffers.push(buf);
-            break;
-          }
-          case "u8": {
-            const num = parseInt(seed.value);
-            const buf = Buffer.alloc(1);
-            buf.writeUInt8(num);
-            seedBuffers.push(buf);
-            break;
-          }
-        }
-      }
-
-      const [pda] = PublicKey.findProgramAddressSync(
-        seedBuffers,
-        program.programId
-      );
-
-      handleAccountChange(accountName, pda.toBase58());
-      setPdaDialogOpen(null);
-      setPdaSeeds([{ id: "1", type: "string", value: "", label: "Seed 1" }]);
-      toast.success("PDA derived and filled!");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to derive PDA");
     }
   };
 
@@ -595,27 +283,43 @@ export default function InstructionBuilderPage() {
     >
       <div className="space-y-6">
         <motion.div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <motion.div
-              initial={{ opacity: 0, scale: 0 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{
-                type: "spring",
-                stiffness: 150,
-                damping: 12,
-                delay: 0.1,
-              }}
-              className="rounded-lg bg-primary/10 p-2"
-            >
-              <Zap className="h-5 w-5 text-primary" />
-            </motion.div>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Instruction Builder</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                Execute instructions from the {programDetails?.name || "selected"}{" "}
-                program
-              </p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <motion.div
+                initial={{ opacity: 0, scale: 0 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 150,
+                  damping: 12,
+                  delay: 0.1,
+                }}
+                className="rounded-lg bg-primary/10 p-2"
+              >
+                <Zap className="h-5 w-5 text-primary" />
+              </motion.div>
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+                  Instruction Builder
+                </h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Execute instructions from the {programDetails?.name || "selected"}{" "}
+                  program
+                </p>
+              </div>
             </div>
+
+            {/* RPC Selector for Execution Environment */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <RPCSelector
+                currentRpcUrl={executionRpcUrl}
+                onRpcChange={handleRpcChange}
+              />
+            </motion.div>
           </div>
         </motion.div>
 
@@ -647,9 +351,10 @@ export default function InstructionBuilderPage() {
                 </TabsList>
               </div>
 
-              {/* Render content for ALL instructions */}
               {formattedInstructions.map((formattedIx) => {
-                const currentInstruction = instructions?.find((ix) => ix.name === formattedIx.name);
+                const currentInstruction = instructions?.find(
+                  (ix) => ix.name === formattedIx.name
+                );
 
                 if (!currentInstruction) return null;
 
@@ -672,14 +377,14 @@ export default function InstructionBuilderPage() {
                               <div className="flex justify-between items-start gap-4">
                                 <div className="flex-1 min-w-0">
                                   <CardTitle className="text-xl font-semibold">
-                                    {currentInstruction.name.charAt(0).toUpperCase() +
-                                      currentInstruction.name.slice(1).replace(/_/g, " ")}
+                                    {formatInstructionName(currentInstruction.name)}
                                   </CardTitle>
-                                  {currentInstruction.docs && currentInstruction.docs[0] && (
-                                    <CardDescription className="mt-1.5">
-                                      {currentInstruction.docs[0]}
-                                    </CardDescription>
-                                  )}
+                                  {currentInstruction.docs &&
+                                    currentInstruction.docs[0] && (
+                                      <CardDescription className="mt-1.5">
+                                        {currentInstruction.docs[0]}
+                                      </CardDescription>
+                                    )}
                                   <div className="flex items-center gap-2 mt-2">
                                     <Badge variant="outline" className="text-xs">
                                       {currentInstruction.args.length} Args
@@ -689,15 +394,80 @@ export default function InstructionBuilderPage() {
                                     </Badge>
                                   </div>
                                 </div>
+
                                 <TooltipProvider delayDuration={200}>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <div className="flex-shrink-0">
+                                      <div className="flex-shrink-0 flex gap-2">
+                                        {/* Save to Test Suite Button */}
+                                        <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+                                          <DialogTrigger asChild>
+                                            <Button
+                                              variant="outline"
+                                              size="lg"
+                                              disabled={!formValid || !publicKey}
+                                              className="gap-2 px-4"
+                                            >
+                                              <Save className="h-4 w-4" />
+                                              Save Test
+                                            </Button>
+                                          </DialogTrigger>
+                                          <DialogContent>
+                                            <DialogHeader>
+                                              <DialogTitle>Save Test Case</DialogTitle>
+                                              <DialogDescription>
+                                                Save this instruction configuration to a test suite
+                                              </DialogDescription>
+                                            </DialogHeader>
+                                            <div className="space-y-4 py-4">
+                                              <div className="space-y-2">
+                                                <Label htmlFor="test-name">Test Case Name</Label>
+                                                <Input
+                                                  id="test-name"
+                                                  placeholder="e.g., Initialize with admin"
+                                                  value={testCaseName}
+                                                  onChange={(e) => setTestCaseName(e.target.value)}
+                                                />
+                                              </div>
+                                              <div className="space-y-2">
+                                                <Label htmlFor="suite-select">Select Test Suite</Label>
+                                                <Select
+                                                  value={selectedSuiteForSave}
+                                                  onValueChange={setSelectedSuiteForSave}
+                                                >
+                                                  <SelectTrigger id="suite-select">
+                                                    <SelectValue placeholder="Choose a suite" />
+                                                  </SelectTrigger>
+                                                  <SelectContent>
+                                                    <SelectItem value="new">
+                                                      <div className="flex items-center gap-2">
+                                                        <Plus className="h-4 w-4" />
+                                                        Create New Suite
+                                                      </div>
+                                                    </SelectItem>
+                                                    {currentProgramSuites.map((suite) => (
+                                                      <SelectItem key={suite.id} value={suite.id}>
+                                                        {suite.name}
+                                                      </SelectItem>
+                                                    ))}
+                                                  </SelectContent>
+                                                </Select>
+                                              </div>
+                                              <Button
+                                                onClick={handleSaveTestCase}
+                                                className="w-full"
+                                                disabled={!testCaseName.trim() || !selectedSuiteForSave}
+                                              >
+                                                Save Test Case
+                                              </Button>
+                                            </div>
+                                          </DialogContent>
+                                        </Dialog>
+
+                                        {/* Execute Button */}
                                         <Button
                                           onClick={handleSubmit}
-                                          disabled={
-                                            !isFormValid || isLoading || !publicKey
-                                          }
+                                          disabled={!formValid || isLoading || !publicKey}
                                           size="lg"
                                           className="gap-2 px-6 font-semibold shadow-md"
                                         >
@@ -724,7 +494,7 @@ export default function InstructionBuilderPage() {
                                       <TooltipContent>
                                         <p>Connect your wallet to execute.</p>
                                       </TooltipContent>
-                                    ) : !isFormValid ? (
+                                    ) : !formValid ? (
                                       <TooltipContent>
                                         <p>Please fill in all required fields.</p>
                                       </TooltipContent>
@@ -733,6 +503,7 @@ export default function InstructionBuilderPage() {
                                 </TooltipProvider>
                               </div>
                             </CardHeader>
+
                             <CardContent className="flex-1 overflow-y-auto px-6 pt-6 pb-6 space-y-6 min-h-0">
                               {/* Arguments Section */}
                               {currentInstruction.args.length > 0 && (
@@ -747,105 +518,22 @@ export default function InstructionBuilderPage() {
                                   </div>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     {currentInstruction.args.map((arg, index) => {
-                                      const resolveType = (type: IdlType): IdlType | { kind: "struct" | "enum"; fields?: Array<{ name: string; type: unknown }>; variants?: Array<{ name: string; fields?: unknown[] }> } => {
-                                        if (typeof type === "object" && "option" in type) {
-                                          type = type.option;
-                                        }
-
-                                        if (typeof type === "object" && "defined" in type) {
-                                          let typeName: string;
-
-                                          if (typeof type.defined === "string") {
-                                            typeName = type.defined;
-                                          } else if (typeof type.defined === "object" && "name" in type.defined) {
-                                            typeName = type.defined.name;
-                                          } else {
-                                            return type;
-                                          }
-
-                                          const definedType = programDetails?.types?.find(
-                                            (t) => t.name.toLowerCase() === typeName.toLowerCase()
-                                          );
-
-                                          return definedType?.type || type;
-                                        }
-                                        return type;
-                                      };
-
-                                      const resolvedType = resolveType(arg.type);
-                                      const isEnum = typeof resolvedType === "object" &&
-                                        "kind" in resolvedType &&
-                                        resolvedType.kind === "enum";
-
-                                      const getSelectedEnumVariant = (value: unknown): string => {
-                                        if (typeof value === "object" && value !== null) {
-                                          const keys = Object.keys(value);
-                                          if (keys.length > 0) {
-                                            const variant = keys[0];
-                                            return variant.charAt(0).toUpperCase() + variant.slice(1);
-                                          }
-                                        }
-                                        return "";
-                                      };
-
+                                      const resolvedType = resolveType(
+                                        arg.type,
+                                        programDetails?.types
+                                      );
                                       return (
-                                        <motion.div
+                                        <ArgumentInput
                                           key={arg.name}
-                                          initial={{ opacity: 0, y: 10 }}
-                                          animate={{ opacity: 1, y: 0 }}
-                                          transition={{ delay: 0.15 + index * 0.05 }}
-                                          className="space-y-2 bg-muted/40 p-4 rounded-lg"
-                                        >
-                                          <div className="flex items-center justify-between">
-                                            <Label htmlFor={`arg-${arg.name}`} className="font-medium">
-                                              {arg.name}
-                                            </Label>
-                                            <Badge variant="outline" className="font-mono text-xs">
-                                              {isEnum
-                                                ? "enum"
-                                                : typeof arg.type === "object" && "option" in arg.type
-                                                  ? `optional ${typeof arg.type.option === "string" ? arg.type.option : "type"}`
-                                                  : typeof arg.type === "string"
-                                                    ? arg.type
-                                                    : JSON.stringify(arg.type)}
-                                            </Badge>
-                                          </div>
-
-                                          {isEnum ? (
-                                            <Select
-                                              value={getSelectedEnumVariant(args[arg.name])}
-                                              onValueChange={(value) => {
-                                                // Convert PascalCase to camelCase for Anchor
-                                                const camelCaseVariant = value.charAt(0).toLowerCase() + value.slice(1);
-                                                handleArgChange(arg.name, { [camelCaseVariant]: {} });
-                                              }}
-                                            >
-                                              <SelectTrigger>
-                                                <SelectValue placeholder={`Select ${arg.name}`} />
-                                              </SelectTrigger>
-                                              <SelectContent>
-                                                {(typeof resolvedType === "object" &&
-                                                  "variants" in resolvedType &&
-                                                  Array.isArray(resolvedType.variants)
-                                                  ? resolvedType.variants
-                                                  : []
-                                                ).map((variant: { name: string; fields?: unknown[] }) => (
-                                                  <SelectItem key={variant.name} value={variant.name}>
-                                                    {variant.name}
-                                                  </SelectItem>
-                                                ))}
-                                              </SelectContent>
-                                            </Select>
-                                          ) : (
-                                            <TypeInput
-                                              type={arg.type}
-                                              value={args[arg.name] as string | number | readonly string[] | undefined}
-                                              onChange={(value: unknown) => handleArgChange(arg.name, value)}
-                                              placeholder={`Enter ${arg.name}`}
-                                              className="mt-1.5 transition-all duration-200 focus-within:shadow-sm"
-                                            />
-                                          )}
-                                        </motion.div>
+                                          name={arg.name}
+                                          type={arg.type}
+                                          value={args[arg.name]}
+                                          onChange={(value) =>
+                                            handleArgChange(arg.name, value)
+                                          }
+                                          resolvedType={resolvedType}
+                                          index={index}
+                                        />
                                       );
                                     })}
                                   </div>
@@ -857,6 +545,7 @@ export default function InstructionBuilderPage() {
                                   <Separator className="my-6" />
                                 )}
 
+                              {/* Accounts Section */}
                               {currentInstruction.accounts.length > 0 && (
                                 <motion.div
                                   initial={{ opacity: 0 }}
@@ -869,177 +558,26 @@ export default function InstructionBuilderPage() {
                                   </div>
                                   <div className="space-y-4">
                                     {currentInstruction.accounts.map((account, index) => (
-                                      <motion.div
+                                      <AccountInput
                                         key={account.name}
-                                        initial={{ opacity: 0, x: -10 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: 0.25 + index * 0.05 }}
-                                        className="bg-muted/40 p-4 rounded-lg space-y-2"
-                                      >
-                                        <div className="flex items-center justify-between flex-wrap gap-2">
-                                          <Label
-                                            htmlFor={`account-${account.name}`}
-                                            className="font-medium"
-                                          >
-                                            {account.name}
-                                          </Label>
-                                          <div className="flex gap-1.5">
-                                            {"signer" in account && account.signer && (
-                                              <Badge
-                                                variant="secondary"
-                                                className="font-normal text-xs"
-                                              >
-                                                Signer
-                                              </Badge>
-                                            )}
-                                            {"writable" in account &&
-                                              account.writable && (
-                                                <Badge
-                                                  variant="default"
-                                                  className="font-normal text-xs"
-                                                >
-                                                  Mutable
-                                                </Badge>
-                                              )}
-                                            {"optional" in account &&
-                                              account.optional && (
-                                                <Badge
-                                                  variant="outline"
-                                                  className="font-normal text-xs"
-                                                >
-                                                  Optional
-                                                </Badge>
-                                              )}
-                                          </div>
-                                        </div>
-                                        <div className="flex gap-2">
-                                          <Input
-                                            id={`account-${account.name}`}
-                                            value={accounts[account.name] || ""}
-                                            onChange={(e) =>
-                                              handleAccountChange(account.name, e.target.value)
-                                            }
-                                            placeholder={`Enter ${account.name} public key`}
-                                            className="font-mono text-sm flex-1 transition-all duration-200 focus:shadow-sm"
-                                          />
-
-                                          <Dialog open={pdaDialogOpen === account.name} onOpenChange={(open) => setPdaDialogOpen(open ? account.name : null)}>
-                                            <DialogTrigger asChild>
-                                              <Button
-                                                variant="outline"
-                                                size="icon"
-                                                title="Derive PDA"
-                                              >
-                                                <Hash className="h-4 w-4" />
-                                              </Button>
-                                            </DialogTrigger>
-                                            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                                              <DialogHeader>
-                                                <DialogTitle>Derive PDA for {account.name}</DialogTitle>
-                                                <DialogDescription>
-                                                  Configure seeds to derive a Program Derived Address
-                                                </DialogDescription>
-                                              </DialogHeader>
-
-                                              <div className="space-y-4 py-4">
-                                                <AnimatePresence mode="popLayout">
-                                                  {pdaSeeds.map((seed, seedIndex) => (
-                                                    <motion.div
-                                                      key={seed.id}
-                                                      initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                                                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                                                      exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                                                      transition={{ duration: 0.2 }}
-                                                      layout
-                                                      className="flex flex-col gap-3 p-4 border rounded-lg bg-muted/20"
-                                                    >
-                                                      <div className="flex items-center justify-between">
-                                                        <Label className="text-sm font-medium">Seed {seedIndex + 1}</Label>
-                                                        {pdaSeeds.length > 1 && (
-                                                          <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="h-7 text-xs text-red-600"
-                                                            onClick={() => removePdaSeed(seed.id)}
-                                                          >
-                                                            Remove
-                                                          </Button>
-                                                        )}
-                                                      </div>
-
-                                                      <div className="grid grid-cols-2 gap-3">
-                                                        <div className="space-y-2">
-                                                          <Label className="text-xs">Type</Label>
-                                                          <Select
-                                                            value={seed.type}
-                                                            onValueChange={(value) => updatePdaSeed(seed.id, "type", value)}
-                                                          >
-                                                            <SelectTrigger className="h-9">
-                                                              <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                              <SelectItem value="string">String</SelectItem>
-                                                              <SelectItem value="publicKey">Public Key</SelectItem>
-                                                              <SelectItem value="u64">u64</SelectItem>
-                                                              <SelectItem value="u32">u32</SelectItem>
-                                                              <SelectItem value="u16">u16</SelectItem>
-                                                              <SelectItem value="u8">u8</SelectItem>
-                                                            </SelectContent>
-                                                          </Select>
-                                                        </div>
-
-                                                        <div className="space-y-2">
-                                                          <Label className="text-xs">Value</Label>
-                                                          <Input
-                                                            placeholder={seed.type === "string" ? "e.g., account" : seed.type === "publicKey" ? "Base58 address" : "Number"}
-                                                            value={seed.value}
-                                                            onChange={(e) => updatePdaSeed(seed.id, "value", e.target.value)}
-                                                            className="h-9 font-mono text-sm"
-                                                          />
-                                                        </div>
-                                                      </div>
-                                                    </motion.div>
-                                                  ))}
-                                                </AnimatePresence>
-
-                                                <div className="flex gap-2">
-                                                  <Button variant="outline" size="sm" onClick={addPdaSeed}>
-                                                    Add Seed
-                                                  </Button>
-                                                  <Button
-                                                    onClick={() => derivePDAForAccount(account.name)}
-                                                    className="flex-1"
-                                                    disabled={pdaSeeds.some((s) => !s.value.trim())}
-                                                  >
-                                                    <Hash className="h-4 w-4 mr-2" />
-                                                    Derive & Fill
-                                                  </Button>
-                                                </div>
-                                              </div>
-                                            </DialogContent>
-                                          </Dialog>
-
-                                          {publicKey && ["authority", "payer", "signer"].some((term) =>
-                                            account.name.toLowerCase().includes(term.toLowerCase())
-                                          ) && (
-                                              <Button
-                                                variant="outline"
-                                                size="icon"
-                                                onClick={() => handleAccountChange(account.name, publicKey.toString())}
-                                                title="Use connected wallet"
-                                              >
-                                                <Copy className="h-4 w-4" />
-                                              </Button>
-                                            )}
-                                        </div>
-                                        {"docs" in account &&
-                                          account.docs &&
-                                          account.docs[0] && (
-                                            <p className="text-xs text-muted-foreground">
-                                              {account.docs[0]}
-                                            </p>
-                                          )}
-                                      </motion.div>
+                                        name={account.name}
+                                        value={accounts[account.name] || ""}
+                                        onChange={(value) =>
+                                          handleAccountChange(account.name, value)
+                                        }
+                                        account={account}
+                                        index={index}
+                                        publicKey={publicKey}
+                                        pdaDialogOpen={pdaManager.pdaDialogOpen}
+                                        onPdaDialogChange={pdaManager.setPdaDialogOpen}
+                                        pdaSeeds={pdaManager.pdaSeeds}
+                                        onAddPdaSeed={pdaManager.addPdaSeed}
+                                        onRemovePdaSeed={pdaManager.removePdaSeed}
+                                        onUpdatePdaSeed={pdaManager.updatePdaSeed}
+                                        onDerivePda={() =>
+                                          pdaManager.derivePDAForAccount(account.name)
+                                        }
+                                      />
                                     ))}
                                   </div>
                                 </motion.div>
@@ -1064,123 +602,17 @@ export default function InstructionBuilderPage() {
           </Card>
         )}
 
-        {/* Success Toast Notification */}
-        <AnimatePresence>
-          {result && showResult && (
-            <motion.div
-              initial={{ opacity: 0, y: -20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -20, scale: 0.95 }}
-              transition={{ type: "spring", stiffness: 200, damping: 20 }}
-              className="fixed top-6 right-6 z-50 w-full max-w-sm"
-            >
-              <Card className="border-green-500/20 bg-green-500/5 shadow-lg">
-                <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                  <div className="flex items-center text-base font-medium text-green-600">
-                    <CheckCircle2 className="h-4 w-4 mr-2 text-green-500" />
-                    Transaction Successful
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setShowResult(false)}
-                  >
-                    <XCircle className="h-4 w-4 text-green-500" />
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">Signature:</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 gap-1"
-                          asChild
-                        >
-                          <Link href={`${getExplorerUrl(result.signature, "solana", programDetails.rpcUrl)}`} target="_blank">
-                            <span className="text-xs">View Transaction</span>
-                            <ExternalLink className="h-3 w-3" />
-                          </Link>
-                        </Button>
-                      </div>
-                      <div className="p-3 bg-background rounded-md overflow-x-auto flex items-center gap-2 border">
-                        <code className="text-xs break-all flex-1">
-                          {result?.signature}
-                        </code>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          onClick={() => {
-                            if (result?.signature) {
-                              navigator.clipboard.writeText(result.signature);
-                              toast.success("Signature copied to clipboard");
-                            }
-                          }}
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Error Toast Notification */}
-        <AnimatePresence>
-          {error && showError && (
-            <motion.div
-              initial={{ opacity: 0, y: -20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -20, scale: 0.95 }}
-              transition={{ type: "spring", stiffness: 200, damping: 20 }}
-              className="fixed top-6 right-6 z-50 w-full max-w-sm"
-            >
-              <Card className="border-destructive bg-destructive/10 shadow-lg">
-                <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                  <div className="flex items-center text-base font-medium text-destructive">
-                    <XCircle className="h-4 w-4 mr-2 text-destructive" />
-                    Transaction Failed
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setShowError(false)}
-                  >
-                    <XCircle className="h-4 w-4 text-destructive" />
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  <div className="p-3 bg-background rounded-md border">
-                    <div className="flex items-start justify-between gap-2">
-                      <code className="text-xs break-all text-destructive">
-                        {error}
-                      </code>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 flex-shrink-0"
-                        onClick={() => {
-                          if (error) {
-                            navigator.clipboard.writeText(error);
-                            toast.success("Error copied to clipboard");
-                          }
-                        }}
-                      >
-                        <Copy className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Success & Error Notifications */}
+        {result && showResult && (
+          <SuccessToast
+            result={result}
+            rpcUrl={executionRpcUrl}
+            onClose={() => setShowResult(false)}
+          />
+        )}
+        {error && showError && (
+          <ErrorToast error={error} onClose={() => setShowError(false)} />
+        )}
       </div>
     </motion.div>
   );

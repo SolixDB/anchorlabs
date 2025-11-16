@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { create, StateCreator } from "zustand";
 import { persist } from "zustand/middleware";
 
 export type RpcOption = "mainnet-beta" | "devnet" | "localnet" | "custom";
@@ -45,44 +45,43 @@ export interface RpcState {
   isCustomRpc: () => boolean;
 }
 
-export const useRpcStore = create<RpcState>()(
-  persist(
-    (set, get) => ({
-      selectedRpc: "devnet",
-      customRpcUrl: "",
-      dropdownOpen: false,
+const creator: StateCreator<RpcState> = (set, get) => ({
+  selectedRpc: "devnet",
+  customRpcUrl: "",
+  dropdownOpen: false,
 
-      setSelectedRpc: (rpc) => set({ selectedRpc: rpc }),
-      setCustomRpcUrl: (url) => set({ customRpcUrl: url }),
-      setDropdownOpen: (isOpen) => set({ dropdownOpen: isOpen }),
+  setSelectedRpc: (rpc) => set({ selectedRpc: rpc }),
+  setCustomRpcUrl: (url) => set({ customRpcUrl: url }),
+  setDropdownOpen: (isOpen) => set({ dropdownOpen: isOpen }),
 
-      getCurrentRpcUrl: () => {
-        const { selectedRpc, customRpcUrl } = get();
-        
-        if (selectedRpc === "custom" && customRpcUrl) {
-          return customRpcUrl;
-        }
-
-        const endpoint = RPC_ENDPOINTS.find((e) => e.value === selectedRpc);
-        return endpoint?.url || RPC_ENDPOINTS[1].url!;
-      },
-
-      getCurrentRpcDisplayName: () => {
-        const { selectedRpc, customRpcUrl } = get();
-        
-        if (selectedRpc === "custom") {
-          return customRpcUrl || "Custom RPC";
-        }
-
-        const endpoint = RPC_ENDPOINTS.find((e) => e.value === selectedRpc);
-        return endpoint?.label || "Select RPC";
-      },
-
-      isCustomRpc: () => get().selectedRpc === "custom",
-    }),
-    {
-      name: "rpc-settings",
-      skipHydration: true,
+  getCurrentRpcUrl: () => {
+    const { selectedRpc, customRpcUrl } = get();
+    
+    if (selectedRpc === "custom" && customRpcUrl) {
+      return customRpcUrl;
     }
-  )
+
+    const endpoint = RPC_ENDPOINTS.find((e) => e.value === selectedRpc);
+    return endpoint?.url || RPC_ENDPOINTS[1].url!;
+  },
+
+  getCurrentRpcDisplayName: () => {
+    const { selectedRpc, customRpcUrl } = get();
+    
+    if (selectedRpc === "custom") {
+      return customRpcUrl || "Custom RPC";
+    }
+
+    const endpoint = RPC_ENDPOINTS.find((e) => e.value === selectedRpc);
+    return endpoint?.label || "Select RPC";
+  },
+
+  isCustomRpc: () => get().selectedRpc === "custom",
+});
+
+export const useRpcStore = create<RpcState>()(
+  persist(creator, {
+    name: "rpc-settings",
+    skipHydration: true,
+  }) as unknown as StateCreator<RpcState, [], [never, unknown][]>
 );

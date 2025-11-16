@@ -1,0 +1,631 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import {
+  Search,
+  Copy,
+  Check,
+  FileText,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  LayoutGrid,
+  Table,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table as TableComponent,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  SortingState,
+  useReactTable,
+} from "@tanstack/react-table";
+import type { IdlField, IdlTypeDef } from "@coral-xyz/anchor/dist/cjs/idl";
+
+// Copy button component
+const CopyButton = ({ text, className }: { text: string; className?: string }) => {
+  const [copied, setCopied] = useState(false);
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast.success("Copied to clipboard");
+  };
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className={cn(
+        "h-7 w-7 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-all",
+        copied && "text-green-600",
+        className
+      )}
+      onClick={copyToClipboard}
+    >
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      <span className="sr-only">Copy</span>
+    </Button>
+  );
+};
+
+// Helper to format enum values
+const formatEnumValue = (value: unknown): string => {
+  if (typeof value === "object" && value !== null) {
+    const keys = Object.keys(value);
+    if (keys.length === 1) {
+      const enumKey = keys[0];
+      const enumValue = (value as Record<string, unknown>)[enumKey];
+      if (
+        typeof enumValue === "object" &&
+        enumValue !== null &&
+        Object.keys(enumValue).length === 0
+      ) {
+        return enumKey;
+      }
+      return `${enumKey}: ${JSON.stringify(enumValue)}`;
+    }
+  }
+  return String(value);
+};
+
+export type AccountData = {
+  publicKey: string;
+  account: Record<string, unknown>;
+};
+
+interface AccountViewProps {
+  data: AccountData[];
+  accountType?: IdlTypeDef;
+}
+
+function isIdlField(field: unknown): field is IdlField {
+  const possibleField = field as { name?: unknown; type?: unknown } | null;
+  return (
+    typeof possibleField === "object" &&
+    possibleField !== null &&
+    typeof possibleField.name === "string" &&
+    "type" in possibleField
+  );
+}
+
+export function AccountView({ data, accountType }: AccountViewProps) {
+  const [globalFilter, setGlobalFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pageSize, setPageSize] = useState(12);
+  const [viewMode, setViewMode] = useState<"card" | "table">("card");
+  const [sorting, setSorting] = useState<SortingState>([]);
+
+  if (!accountType) {
+    return <div>No account type specified</div>;
+  }
+
+  const accountFields: IdlField[] =
+    accountType &&
+    accountType.type &&
+    accountType.type.kind === "struct" &&
+    Array.isArray(accountType.type.fields)
+      ? (accountType.type.fields as unknown[]).filter(isIdlField)
+      : [];
+
+  // Filter data
+  const filteredData = data.filter((item) => {
+    if (!globalFilter) return true;
+    const search = globalFilter.toLowerCase();
+    if (item.publicKey.toLowerCase().includes(search)) return true;
+    return Object.entries(item.account).some(([key, value]) => {
+      const valueStr = String(value).toLowerCase();
+      return key.toLowerCase().includes(search) || valueStr.includes(search);
+    });
+  });
+
+  const formatFieldValue = (field: IdlField, value: unknown) => {
+    const fieldType = typeof field.type === "string" ? field.type : "";
+    switch (fieldType) {
+      case "pubkey":
+        return value?.toString() || "";
+      case "u64":
+      case "u32":
+      case "u16":
+      case "u8":
+      case "i64":
+      case "i32":
+      case "i16":
+      case "i8":
+        return value ? value.toString() : "0";
+      case "bool":
+        return value ? "Yes" : "No";
+      default:
+        if (typeof value === "object" && value !== null) {
+          const keys = Object.keys(value);
+          if (keys.length === 1) {
+            return formatEnumValue(value);
+          }
+          return JSON.stringify(value, null, 2);
+        }
+        return String(value ?? "");
+    }
+  };
+
+  const getFieldTypeColor = (fieldType: string) => {
+    if (fieldType === "pubkey") return "bg-blue-500/10 text-blue-700 dark:text-blue-300";
+    if (fieldType === "bool") return "bg-green-500/10 text-green-700 dark:text-green-300";
+    if (fieldType.startsWith("u") || fieldType.startsWith("i"))
+      return "bg-purple-500/10 text-purple-700 dark:text-purple-300";
+    return "bg-orange-500/10 text-orange-700 dark:text-orange-300";
+  };
+
+  // Table columns
+  const columns = useMemo<ColumnDef<AccountData>[]>(() => {
+    const baseColumns: ColumnDef<AccountData>[] = [
+      {
+        id: "publicKey",
+        header: "Public Key",
+        accessorKey: "publicKey",
+        cell: ({ row }) => {
+          const value = row.getValue("publicKey") as string;
+          const shortValue = `${value.slice(0, 6)}...${value.slice(-6)}`;
+          return (
+            <div className="flex items-center gap-2 group">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="font-mono text-sm font-medium cursor-help">
+                      {shortValue}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="font-mono text-xs max-w-xs break-all">
+                    {value}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <CopyButton text={value} className="opacity-0 group-hover:opacity-100" />
+            </div>
+          );
+        },
+      },
+    ];
+
+    const dynamicColumns: ColumnDef<AccountData>[] = accountFields.map((field) => {
+      const fieldType = typeof field.type === "string" ? field.type : "";
+      return {
+        id: field.name,
+        header: field.name.charAt(0).toUpperCase() + field.name.slice(1),
+        accessorFn: (row) => formatFieldValue(field, row.account[field.name]),
+        cell: ({ getValue }) => {
+          const value = getValue() as string;
+          const displayValue =
+            typeof value === "object" && value !== null
+              ? JSON.stringify(value, null, 2)
+              : String(value ?? "");
+
+          if (fieldType === "pubkey") {
+            const shortValue =
+              displayValue.length > 16
+                ? `${displayValue.slice(0, 8)}...${displayValue.slice(-8)}`
+                : displayValue;
+            return (
+              <div className="flex items-center gap-2 group">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="font-mono text-sm cursor-help">{shortValue}</span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="font-mono text-xs max-w-xs break-all">
+                      {displayValue}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <CopyButton text={displayValue} className="opacity-0 group-hover:opacity-100" />
+              </div>
+            );
+          }
+
+          // Check if value is empty
+          const isEmpty = !displayValue || displayValue === "" || displayValue === "null" || displayValue === "undefined";
+          
+          if (isEmpty) {
+            return <span className="text-muted-foreground">-</span>;
+          }
+
+          if (displayValue.length > 50) {
+            return (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="max-w-[200px] truncate cursor-pointer hover:text-foreground transition-colors">
+                      {displayValue}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-md" side="bottom" align="start">
+                    <div className="flex items-start justify-between gap-2">
+                      <pre className="text-xs whitespace-pre-wrap break-all font-mono max-h-60 overflow-y-auto">
+                        {displayValue}
+                      </pre>
+                      <CopyButton text={displayValue} />
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            );
+          }
+
+          return <div className="max-w-[200px] truncate font-mono text-sm">{displayValue}</div>;
+        },
+      };
+    });
+
+    return [...baseColumns, ...dynamicColumns];
+  }, [accountFields]);
+
+  const table = useReactTable({
+    data: filteredData,
+    columns,
+    state: {
+      sorting,
+      globalFilter,
+      pagination: {
+        pageIndex: currentPage,
+        pageSize: viewMode === "table" ? 10 : pageSize,
+      },
+    },
+    onGlobalFilterChange: setGlobalFilter,
+    onSortingChange: setSorting,
+    onPaginationChange: (updater) => {
+      const newPagination =
+        typeof updater === "function"
+          ? updater({
+              pageIndex: currentPage,
+              pageSize: viewMode === "table" ? 10 : pageSize,
+            })
+          : updater;
+      setCurrentPage(newPagination.pageIndex);
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    autoResetPageIndex: false,
+  });
+
+  const totalPages =
+    viewMode === "table" ? table.getPageCount() : Math.ceil(filteredData.length / pageSize);
+  const paginatedData = filteredData.slice(
+    currentPage * pageSize,
+    currentPage * pageSize + pageSize
+  );
+
+  return (
+    <div className="flex flex-col space-y-6">
+      {/* Header with search, stats, and view toggle */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="flex-1">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder={`Search ${accountType?.name || "accounts"}...`}
+              className="pl-10 h-10"
+              value={globalFilter}
+              onChange={(e) => {
+                setGlobalFilter(e.target.value);
+                setCurrentPage(0);
+              }}
+            />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="rounded-lg bg-muted px-4 py-2 border">
+            <span className="font-semibold">{filteredData.length}</span>
+            <span className="text-muted-foreground ml-1.5">
+              {filteredData.length === 1 ? "account" : "accounts"}
+            </span>
+          </div>
+          <div className="flex items-center rounded-lg border bg-background p-1">
+            <Button
+              variant={viewMode === "card" ? "default" : "ghost"}
+              size="sm"
+              className="h-8 px-3 gap-2"
+              onClick={() => {
+                setViewMode("card");
+                setCurrentPage(0);
+              }}
+            >
+              <LayoutGrid className="h-4 w-4" />
+              <span className="hidden sm:inline">Cards</span>
+            </Button>
+            <Button
+              variant={viewMode === "table" ? "default" : "ghost"}
+              size="sm"
+              className="h-8 px-3 gap-2"
+              onClick={() => {
+                setViewMode("table");
+                setCurrentPage(0);
+              }}
+            >
+              <Table className="h-4 w-4" />
+              <span className="hidden sm:inline">Table</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Content Area */}
+      {viewMode === "card" ? (
+        paginatedData.length > 0 ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+            {paginatedData.map((item) => (
+              <div
+                key={item.publicKey}
+                className="group bg-card border rounded-lg shadow-sm hover:shadow-md transition-all"
+              >
+                {/* Card Header */}
+                <div className="px-4 py-3 bg-muted/50 border-b">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Public Key</p>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <p className="font-mono text-sm font-semibold truncate cursor-help">
+                              {item.publicKey}
+                            </p>
+                          </TooltipTrigger>
+                          <TooltipContent className="font-mono text-xs max-w-xs break-all">
+                            {item.publicKey}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                    <CopyButton
+                      text={item.publicKey}
+                      className="opacity-0 group-hover:opacity-100"
+                    />
+                  </div>
+                </div>
+
+                {/* Card Body */}
+                <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto">
+                  {accountFields.map((field) => {
+                    const value = item.account[field.name];
+                    const displayValue = formatFieldValue(field, value);
+                    const fullValue = value?.toString() || "";
+                    const fieldType = typeof field.type === "string" ? field.type : "";
+
+                    // Check if value is empty/null/undefined
+                    const isEmpty = value === null || value === undefined || displayValue === "" || displayValue === "0" && fieldType !== "u64" && fieldType !== "u32" && fieldType !== "u16" && fieldType !== "u8" && fieldType !== "i64" && fieldType !== "i32" && fieldType !== "i16" && fieldType !== "i8";
+                    const showValue = isEmpty ? "-" : displayValue;
+
+                    return (
+                      <div key={field.name} className="space-y-1.5 group/field">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-muted-foreground">
+                              {field.name}
+                            </span>
+                            {fieldType && (
+                              <span
+                                className={cn(
+                                  "px-1.5 py-0.5 text-[10px] font-medium rounded",
+                                  getFieldTypeColor(fieldType)
+                                )}
+                              >
+                                {fieldType}
+                              </span>
+                            )}
+                          </div>
+                          {!isEmpty && (fieldType === "pubkey" || displayValue.length > 20) && (
+                            <CopyButton
+                              text={fullValue}
+                              className="opacity-0 group-hover/field:opacity-100 h-6 w-6"
+                            />
+                          )}
+                        </div>
+                        <div className="pl-0.5">
+                          {isEmpty ? (
+                            <p className="text-sm font-mono bg-muted/50 px-2 py-1.5 rounded text-muted-foreground">
+                              -
+                            </p>
+                          ) : showValue.length > 100 ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <p className="text-sm font-mono bg-muted/50 px-2 py-1.5 rounded break-all line-clamp-3 cursor-pointer hover:bg-muted transition-colors">
+                                    {showValue}
+                                  </p>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-md" side="left" align="start">
+                                  <pre className="text-xs whitespace-pre-wrap break-all font-mono max-h-60 overflow-y-auto">
+                                    {showValue}
+                                  </pre>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : (
+                            <p className="text-sm font-mono bg-muted/50 px-2 py-1.5 rounded break-all">
+                              {showValue}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center gap-4 py-16 border rounded-lg bg-muted/20">
+            <FileText className="h-12 w-12 text-muted-foreground/50" />
+            <div className="text-center">
+              <p className="text-lg font-medium">No accounts found</p>
+              {globalFilter && <p className="text-sm text-muted-foreground mt-1">Try adjusting your search</p>}
+            </div>
+          </div>
+        )
+      ) : (
+        <div className="rounded-lg border shadow-sm bg-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <TableComponent>
+              <TableHeader>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id} className="hover:bg-muted/50">
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id} className="h-12 px-4 font-semibold">
+                        {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                          <div
+                            className="flex items-center gap-2 cursor-pointer select-none hover:text-foreground group"
+                            onClick={header.column.getToggleSortingHandler()}
+                          >
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                            <div className="flex flex-col">
+                              {{
+                                asc: <ChevronUp className="h-4 w-4" />,
+                                desc: <ChevronDown className="h-4 w-4" />,
+                              }[header.column.getIsSorted() as string] ?? (
+                                <ChevronUp className="h-4 w-4 opacity-0 group-hover:opacity-30" />
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          flexRender(header.column.columnDef.header, header.getContext())
+                        )}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {table.getRowModel().rows?.length ? (
+                  table.getRowModel().rows.map((row) => (
+                    <TableRow key={row.id} className="hover:bg-muted/30">
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id} className="px-4 py-3">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={columns.length} className="h-32 text-center">
+                      <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                        <FileText className="h-8 w-8 opacity-50" />
+                        <p className="text-sm font-medium">No accounts found</p>
+                        {globalFilter && <p className="text-xs">Try adjusting your search</p>}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </TableComponent>
+          </div>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-muted-foreground">
+              Page <span className="font-medium text-foreground">{currentPage + 1}</span> of{" "}
+              <span className="font-medium text-foreground">{totalPages}</span>
+            </div>
+            {viewMode === "card" && (
+              <Select
+                value={pageSize.toString()}
+                onValueChange={(value) => {
+                  setPageSize(Number(value));
+                  setCurrentPage(0);
+                }}
+              >
+                <SelectTrigger className="h-9 w-[120px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[12, 24, 36, 48].map((size) => (
+                    <SelectItem key={size} value={size.toString()}>
+                      {size} cards
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 w-9 p-0"
+              onClick={() => setCurrentPage(0)}
+              disabled={currentPage === 0}
+            >
+              <span className="sr-only">Go to first page</span>
+              <ChevronsLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 w-9 p-0"
+              onClick={() => setCurrentPage(currentPage - 1)}
+              disabled={currentPage === 0}
+            >
+              <span className="sr-only">Go to previous page</span>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 w-9 p-0"
+              onClick={() => setCurrentPage(currentPage + 1)}
+              disabled={currentPage >= totalPages - 1}
+            >
+              <span className="sr-only">Go to next page</span>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 w-9 p-0"
+              onClick={() => setCurrentPage(totalPages - 1)}
+              disabled={currentPage >= totalPages - 1}
+            >
+              <span className="sr-only">Go to last page</span>
+              <ChevronsRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

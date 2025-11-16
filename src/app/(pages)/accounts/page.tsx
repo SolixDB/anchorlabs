@@ -16,8 +16,8 @@ import { AlertCircle, Database, Inbox, RefreshCw } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 
-const AccountTable = dynamic(
-  () => import("@/components/AccountTable").then((mod) => mod.AccountTable),
+const AccountView = dynamic(
+  () => import("@/components/AccountView").then((mod) => mod.AccountView),
   {
     ssr: false,
     loading: () => (
@@ -39,7 +39,6 @@ function AccountTabContent({
   isActive: boolean;
 }) {
   const { program } = useProgramStore();
-
   const {
     data: accountsData,
     isLoading,
@@ -122,7 +121,7 @@ function AccountTabContent({
           Refresh
         </Button>
       </div>
-      <AccountTable data={transformedData} accountType={accountType} />
+      <AccountView data={transformedData} accountType={accountType} />
     </div>
   );
 }
@@ -131,9 +130,9 @@ export default function AccountsPage() {
   const programStoreState = useProgramStore((state) => state);
   const { program, programDetails, error } = programStoreState;
   const wallet = useAnchorWallet();
-  useAutoReinitialize(wallet)
-  const accounts = useMemo(() => program?.idl?.accounts || [], [program]);
+  useAutoReinitialize(wallet);
 
+  const accounts = useMemo(() => program?.idl?.accounts || [], [program]);
   const [activeTab, setActiveTab] = useState(accounts[0]?.name ?? "");
 
   if (error) {
@@ -166,14 +165,22 @@ export default function AccountsPage() {
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: "spring", stiffness: 200, damping: 15 }}
+            transition={{
+              delay: 0.2,
+              type: "spring",
+              stiffness: 200,
+              damping: 15,
+            }}
             className="rounded-full bg-muted p-4 mb-4"
           >
             <Inbox className="h-8 w-8 text-muted-foreground" />
           </motion.div>
-          <h2 className="text-xl font-semibold mb-2">No Account Types Defined</h2>
+          <h2 className="text-xl font-semibold mb-2">
+            No Account Types Defined
+          </h2>
           <p className="text-muted-foreground text-center max-w-md">
-            This program doesn&lsquo;t define any account types in its IDL. Account types are required to store and query on-chain data.
+            This program doesn&lsquo;t define any account types in its IDL.
+            Account types are required to store and query on-chain data.
           </p>
         </div>
       </motion.div>
@@ -185,7 +192,7 @@ export default function AccountsPage() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.4 }}
-      className="w-full max-w-6xl mx-auto p-4 sm:p-6 lg:p-8"
+      className="w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8"
     >
       <div className="space-y-6">
         {/* Header Section */}
@@ -199,15 +206,23 @@ export default function AccountsPage() {
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              transition={{ delay: 0.2, type: "spring", stiffness: 200, damping: 15 }}
+              transition={{
+                delay: 0.2,
+                type: "spring",
+                stiffness: 200,
+                damping: 15,
+              }}
               className="rounded-lg bg-primary/10 p-2"
             >
               <Database className="h-5 w-5 text-primary" />
             </motion.div>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Program Accounts</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+                Program Accounts
+              </h1>
               <p className="text-sm text-muted-foreground mt-1">
-                View and explore on-chain account data for {programDetails.name || 'this program'}
+                View and explore on-chain account data for{" "}
+                {programDetails.name || "this program"}
               </p>
             </div>
           </div>

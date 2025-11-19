@@ -367,9 +367,9 @@ export default function InstructionBuilderPage() {
                     <AnimatePresence mode="wait">
                       {selectedIx === currentInstruction.name && (
                         <motion.div
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
+                          initial={{ y: 10 }}
+                          animate={{ y: 0 }}
+                          exit={{ y: -10 }}
                           transition={{ duration: 0.2 }}
                         >
                           <Card className="w-full flex flex-col flex-1 overflow-hidden">

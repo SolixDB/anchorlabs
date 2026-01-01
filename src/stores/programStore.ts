@@ -4,6 +4,7 @@ import { Connection, Commitment, Cluster } from "@solana/web3.js";
 import { AnchorWallet } from "@jup-ag/wallet-adapter";
 import { persist } from "zustand/middleware";
 import { IdlType } from "@coral-xyz/anchor/dist/cjs/idl";
+import { createDummyWallet } from "@/utils/dummyWallet";
 
 type AnyProgram = Program<Idl>;
 type CommitmentLevel = Commitment;
@@ -46,7 +47,7 @@ export interface ProgramState {
   initialize: (
     idl: Idl,
     rpcUrl: string,
-    wallet: AnchorWallet,
+    wallet?: AnchorWallet | null,
     commitment?: CommitmentLevel
   ) => Promise<AnyProgram | null>;
   reinitialize: (wallet: AnchorWallet) => Promise<AnyProgram | null>;
@@ -102,7 +103,7 @@ const useProgramStore = create<ProgramState>()(
       initialize: async (
         idl: Idl,
         rpcUrl: string,
-        wallet: AnchorWallet,
+        wallet: AnchorWallet | null = null,
         commitment: CommitmentLevel = DEFAULT_COMMITMENT
       ): Promise<AnyProgram | null> => {
         try {
@@ -116,7 +117,9 @@ const useProgramStore = create<ProgramState>()(
           });
 
           const connection = new Connection(rpcUrl, CONNECTION_CONFIG);
-          const provider = new AnchorProvider(connection, wallet, {
+          // Use dummy wallet if no wallet provided (for read-only initialization)
+          const walletToUse = wallet || createDummyWallet();
+          const provider = new AnchorProvider(connection, walletToUse, {
             preflightCommitment: commitment,
             commitment,
           });

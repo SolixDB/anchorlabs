@@ -7,13 +7,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Check, Info, Network } from "lucide-react";
+import { Check, Network } from "lucide-react";
 import { useState } from "react";
 
 interface RPCSelectorProps {
@@ -66,24 +60,31 @@ export const RPCSelector: React.FC<RPCSelectorProps> = ({
     <div className="flex items-center gap-2">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="gap-2">
-            <Network className="h-4 w-4" />
-            <span className="hidden sm:inline">RPC:</span>
-            <Badge variant="secondary" className="font-normal">
+          <Button 
+            variant="outline" 
+            size="default"
+            className="gap-2.5 h-10 px-4 backdrop-blur-sm bg-background/80 border-border/50 hover:bg-background/90 transition-all"
+          >
+            <Network className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-muted-foreground hidden sm:inline">Network:</span>
+            <Badge 
+              variant="secondary" 
+              className="font-medium text-xs px-2 py-0.5 bg-primary/10 text-primary border-0"
+            >
               {getCurrentNetwork()}
             </Badge>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-80" align="end">
-          <div className="space-y-4">
+        <PopoverContent className="w-80 backdrop-blur-md bg-background/95 border-border/50 shadow-xl" align="end">
+          <div className="space-y-5">
             <div>
-              <h4 className="font-medium text-sm mb-2">Select RPC Endpoint</h4>
+              <h4 className="font-semibold text-sm mb-3 text-foreground">Select RPC Endpoint</h4>
               <div className="space-y-2">
                 {PRESET_RPCS.map((rpc) => (
                   <Button
                     key={rpc.url}
                     variant={currentRpcUrl === rpc.url ? "default" : "outline"}
-                    className="w-full justify-between"
+                    className="w-full justify-between h-10 font-medium"
                     onClick={() => handlePresetClick(rpc.url)}
                   >
                     <span>{rpc.name}</span>
@@ -93,19 +94,18 @@ export const RPCSelector: React.FC<RPCSelectorProps> = ({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="custom-rpc">Custom RPC URL</Label>
+            <div className="space-y-3 pt-2 border-t border-border/50">
+              <Label htmlFor="custom-rpc" className="text-sm font-medium">Custom RPC URL</Label>
               <Input
                 id="custom-rpc"
                 placeholder="https://your-rpc-url.com"
                 value={customRpc}
                 onChange={(e) => setCustomRpc(e.target.value)}
-                className="font-mono text-xs"
+                className="font-mono text-sm h-10"
               />
               <Button
                 onClick={handleCustomApply}
-                className="w-full"
-                size="sm"
+                className="w-full h-10 font-medium"
                 disabled={
                   !customRpc ||
                   customRpc.trim() === "" ||
@@ -118,22 +118,6 @@ export const RPCSelector: React.FC<RPCSelectorProps> = ({
           </div>
         </PopoverContent>
       </Popover>
-
-      <TooltipProvider delayDuration={200}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <Info className="h-4 w-4 text-muted-foreground" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent className="max-w-xs" side="bottom" align="end">
-            <p className="text-sm">
-              This only changes the instruction execution environment, not the
-              global program connection
-            </p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
     </div>
   );
 };

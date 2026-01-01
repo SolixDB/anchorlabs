@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { useCallback, useEffect, useState } from "react";
 import { Idl, Program } from "@coral-xyz/anchor";
 import { useAnchorProvider } from "../Providers/SolanaProvider";
-import { Input } from "../ui/input";
+import { Input } from "./input";
 import { PublicKey } from "@solana/web3.js";
 import { toast } from "sonner";
 import { IdlInputMethod } from "../ProgramWizard/wizard.types";

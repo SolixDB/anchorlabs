@@ -55,7 +55,7 @@ export const AccountInput: React.FC<AccountInputProps> = ({
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: 0.25 + index * 0.05 }}
-      className="bg-muted/40 p-4 rounded-lg space-y-2"
+      className="bg-muted/40 p-4 rounded-lg space-y-2.5"
     >
       <div className="flex items-center justify-between flex-wrap gap-2">
         <Label htmlFor={`account-${name}`} className="font-medium">
@@ -80,13 +80,13 @@ export const AccountInput: React.FC<AccountInputProps> = ({
         </div>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
         <Input
           id={`account-${name}`}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={`Enter ${name} public key`}
-          className="font-mono text-sm flex-1 transition-all duration-200 focus:shadow-sm"
+          className="font-mono text-sm flex-1 transition-all duration-200 focus:shadow-sm h-11"
         />
 
         <PDADialog
@@ -104,6 +104,7 @@ export const AccountInput: React.FC<AccountInputProps> = ({
           <Button
             variant="outline"
             size="icon"
+            className="h-11 w-11"
             onClick={() => onChange(publicKey.toString())}
             title="Use connected wallet"
           >
@@ -113,7 +114,7 @@ export const AccountInput: React.FC<AccountInputProps> = ({
       </div>
 
       {"docs" in account && account.docs && account.docs[0] && (
-        <p className="text-xs text-muted-foreground">{account.docs[0]}</p>
+        <p className="text-xs text-muted-foreground mt-1.5">{account.docs[0]}</p>
       )}
     </motion.div>
   );

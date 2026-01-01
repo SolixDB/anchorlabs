@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { motion } from "framer-motion";
 import {
   Search,
   Copy,
@@ -14,6 +15,7 @@ import {
   Table,
   ChevronDown,
   ChevronUp,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -108,6 +110,7 @@ export type AccountData = {
 interface AccountViewProps {
   data: AccountData[];
   accountType?: IdlTypeDef;
+  onRefresh?: () => void;
 }
 
 function isIdlField(field: unknown): field is IdlField {
@@ -120,10 +123,10 @@ function isIdlField(field: unknown): field is IdlField {
   );
 }
 
-export function AccountView({ data, accountType }: AccountViewProps) {
+export function AccountView({ data, accountType, onRefresh }: AccountViewProps) {
   const [globalFilter, setGlobalFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(0);
-  const [pageSize, setPageSize] = useState(12);
+  const [pageSize, setPageSize] = useState(6);
   const [viewMode, setViewMode] = useState<"card" | "table">("card");
   const [sorting, setSorting] = useState<SortingState>([]);
 
@@ -331,15 +334,15 @@ export function AccountView({ data, accountType }: AccountViewProps) {
   );
 
   return (
-    <div className="flex flex-col space-y-6">
-      {/* Header with search, stats, and view toggle */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+    <div className="flex flex-col space-y-4">
+      {/* Simplified header */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex-1">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder={`Search ${accountType?.name || "accounts"}...`}
-              className="pl-10 h-10"
+              className="pl-10 h-11 bg-card/95 backdrop-blur-sm border-2 border-primary/10 focus:border-primary/20 shadow-sm"
               value={globalFilter}
               onChange={(e) => {
                 setGlobalFilter(e.target.value);
@@ -348,18 +351,28 @@ export function AccountView({ data, accountType }: AccountViewProps) {
             />
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-muted px-4 py-2 border">
-            <span className="font-semibold">{filteredData.length}</span>
-            <span className="text-muted-foreground ml-1.5">
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={onRefresh}
+            variant="outline"
+            size="sm"
+            className="gap-2 h-9"
+            disabled={!onRefresh}
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+          <div className="rounded-lg bg-primary/10 border border-primary/20 px-4 py-2">
+            <span className="font-bold text-primary">{filteredData.length}</span>
+            <span className="text-muted-foreground ml-1.5 text-sm">
               {filteredData.length === 1 ? "account" : "accounts"}
             </span>
           </div>
-          <div className="flex items-center rounded-lg border bg-background p-1">
+          <div className="flex items-center rounded-lg border-2 border-primary/10 bg-card/95 backdrop-blur-sm p-1">
             <Button
               variant={viewMode === "card" ? "default" : "ghost"}
               size="sm"
-              className="h-8 px-3 gap-2"
+              className="h-9 px-3 gap-2"
               onClick={() => {
                 setViewMode("card");
                 setCurrentPage(0);
@@ -371,7 +384,7 @@ export function AccountView({ data, accountType }: AccountViewProps) {
             <Button
               variant={viewMode === "table" ? "default" : "ghost"}
               size="sm"
-              className="h-8 px-3 gap-2"
+              className="h-9 px-3 gap-2"
               onClick={() => {
                 setViewMode("table");
                 setCurrentPage(0);
@@ -388,20 +401,24 @@ export function AccountView({ data, accountType }: AccountViewProps) {
       {viewMode === "card" ? (
         paginatedData.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-            {paginatedData.map((item) => (
-              <div
+            {paginatedData.map((item, index) => (
+              <motion.div
                 key={item.publicKey}
-                className="group bg-card border rounded-lg shadow-sm hover:shadow-md transition-all"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(index * 0.03, 0.3) }}
+                whileHover={{ y: -4 }}
+                className="group bg-card/95 backdrop-blur-sm border-2 border-primary/10 rounded-xl shadow-lg hover:shadow-xl hover:border-primary/20 transition-all duration-300"
               >
                 {/* Card Header */}
-                <div className="px-4 py-3 bg-muted/50 border-b">
-                  <div className="flex items-start justify-between gap-2">
+                <div className="px-6 py-5 bg-gradient-to-r from-primary/10 to-primary/5 border-b-2 border-primary/20">
+                  <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-muted-foreground mb-1">Public Key</p>
+                      <p className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wider">Public Key</p>
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <p className="font-mono text-sm font-semibold truncate cursor-help">
+                            <p className="font-mono text-sm font-bold text-foreground truncate cursor-help break-all">
                               {item.publicKey}
                             </p>
                           </TooltipTrigger>
@@ -419,7 +436,7 @@ export function AccountView({ data, accountType }: AccountViewProps) {
                 </div>
 
                 {/* Card Body */}
-                <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto">
+                <div className="p-5 space-y-4 max-h-[500px] overflow-y-auto">
                   {accountFields.map((field) => {
                     const value = item.account[field.name];
                     const displayValue = formatFieldValue(field, value);
@@ -431,16 +448,16 @@ export function AccountView({ data, accountType }: AccountViewProps) {
                     const showValue = isEmpty ? "-" : displayValue;
 
                     return (
-                      <div key={field.name} className="space-y-1.5 group/field">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-muted-foreground">
+                      <div key={field.name} className="space-y-2.5 group/field">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-sm font-bold text-foreground">
                               {field.name}
                             </span>
                             {fieldType && (
                               <span
                                 className={cn(
-                                  "px-1.5 py-0.5 text-[10px] font-medium rounded",
+                                  "px-2.5 py-1 text-[11px] font-semibold rounded-md border-2",
                                   getFieldTypeColor(fieldType)
                                 )}
                               >
@@ -451,20 +468,20 @@ export function AccountView({ data, accountType }: AccountViewProps) {
                           {!isEmpty && (fieldType === "pubkey" || displayValue.length > 20) && (
                             <CopyButton
                               text={fullValue}
-                              className="opacity-0 group-hover/field:opacity-100 h-6 w-6"
+                              className="opacity-0 group-hover/field:opacity-100 h-7 w-7"
                             />
                           )}
                         </div>
-                        <div className="pl-0.5">
+                        <div>
                           {isEmpty ? (
-                            <p className="text-sm font-mono bg-muted/50 px-2 py-1.5 rounded text-muted-foreground">
+                            <p className="text-sm font-mono bg-muted/40 px-4 py-3 rounded-lg text-muted-foreground border-2 border-dashed border-muted-foreground/20">
                               -
                             </p>
                           ) : showValue.length > 100 ? (
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <p className="text-sm font-mono bg-muted/50 px-2 py-1.5 rounded break-all line-clamp-3 cursor-pointer hover:bg-muted transition-colors">
+                                  <p className="text-sm font-mono bg-muted/40 px-4 py-3 rounded-lg break-all line-clamp-3 cursor-pointer hover:bg-muted/60 transition-colors border-2 border-primary/10">
                                     {showValue}
                                   </p>
                                 </TooltipTrigger>
@@ -476,7 +493,7 @@ export function AccountView({ data, accountType }: AccountViewProps) {
                               </Tooltip>
                             </TooltipProvider>
                           ) : (
-                            <p className="text-sm font-mono bg-muted/50 px-2 py-1.5 rounded break-all">
+                            <p className="text-sm font-mono bg-muted/40 px-4 py-3 rounded-lg break-all border-2 border-primary/10 text-foreground">
                               {showValue}
                             </p>
                           )}
@@ -485,27 +502,27 @@ export function AccountView({ data, accountType }: AccountViewProps) {
                     );
                   })}
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center gap-4 py-16 border rounded-lg bg-muted/20">
+          <div className="flex flex-col items-center justify-center gap-4 py-16 border-2 border-dashed border-primary/20 rounded-xl bg-gradient-to-br from-muted/40 to-muted/20">
             <FileText className="h-12 w-12 text-muted-foreground/50" />
             <div className="text-center">
-              <p className="text-lg font-medium">No accounts found</p>
+              <p className="text-lg font-semibold">No accounts found</p>
               {globalFilter && <p className="text-sm text-muted-foreground mt-1">Try adjusting your search</p>}
             </div>
           </div>
         )
       ) : (
-        <div className="rounded-lg border shadow-sm bg-card overflow-hidden">
+        <div className="rounded-xl border-2 border-primary/10 bg-card/95 backdrop-blur-sm shadow-lg overflow-hidden">
           <div className="overflow-x-auto">
             <TableComponent>
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id} className="hover:bg-muted/50">
+                  <TableRow key={headerGroup.id} className="bg-gradient-to-r from-primary/10 to-primary/5 hover:bg-primary/10 border-b-2 border-primary/20">
                     {headerGroup.headers.map((header) => (
-                      <TableHead key={header.id} className="h-12 px-4 font-semibold">
+                      <TableHead key={header.id} className="h-14 px-6 font-bold text-xs uppercase tracking-wider text-foreground">
                         {header.isPlaceholder ? null : header.column.getCanSort() ? (
                           <div
                             className="flex items-center gap-2 cursor-pointer select-none hover:text-foreground group"
@@ -532,9 +549,9 @@ export function AccountView({ data, accountType }: AccountViewProps) {
               <TableBody>
                 {table.getRowModel().rows?.length ? (
                   table.getRowModel().rows.map((row) => (
-                    <TableRow key={row.id} className="hover:bg-muted/30">
+                    <TableRow key={row.id} className="hover:bg-muted/60 border-b border-primary/5 transition-colors">
                       {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id} className="px-4 py-3">
+                        <TableCell key={cell.id} className="px-6 py-5 text-sm">
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </TableCell>
                       ))}
@@ -559,11 +576,11 @@ export function AccountView({ data, accountType }: AccountViewProps) {
 
       {/* Pagination */}
       {totalPages > 0 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-primary/5">
           <div className="flex items-center gap-4">
             <div className="text-sm text-muted-foreground">
-              Page <span className="font-medium text-foreground">{currentPage + 1}</span> of{" "}
-              <span className="font-medium text-foreground">{totalPages}</span>
+              Page <span className="font-semibold text-foreground">{currentPage + 1}</span> of{" "}
+              <span className="font-semibold text-foreground">{totalPages}</span>
             </div>
             {viewMode === "card" && (
               <Select
@@ -573,11 +590,11 @@ export function AccountView({ data, accountType }: AccountViewProps) {
                   setCurrentPage(0);
                 }}
               >
-                <SelectTrigger className="h-9 w-[120px]">
+                <SelectTrigger className="h-9 w-[120px] bg-card/95 backdrop-blur-sm border-2 border-primary/10">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {[12, 24, 36, 48].map((size) => (
+                  {[6, 12, 18, 24].map((size) => (
                     <SelectItem key={size} value={size.toString()}>
                       {size} cards
                     </SelectItem>

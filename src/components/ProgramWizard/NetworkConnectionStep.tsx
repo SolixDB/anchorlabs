@@ -5,8 +5,11 @@ import {
   useRpcStore,
   type RpcOption
 } from "@/stores/rpcStore";
+import { useJsonStore } from "@/stores/jsonStore";
+import useProgramStore from "@/stores/programStore";
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -14,7 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useWallet } from "@solana/wallet-adapter-react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -23,10 +25,8 @@ import {
   Database,
   Loader2,
   ServerIcon,
-  Wallet,
   XCircle,
 } from "lucide-react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface NetworkConnectionStepProps {
@@ -38,8 +38,9 @@ export default function NetworkConnectionStep({
   onNext,
   onBack,
 }: NetworkConnectionStepProps) {
-  const { publicKey } = useWallet();
-  const { setVisible } = useWalletModal();
+  const { jsonData, reset: resetJsonStore } = useJsonStore();
+  const { initialize } = useProgramStore();
+  const [isInitializing, setIsInitializing] = useState(false);
 
   const {
     selectedRpc,
@@ -60,7 +61,8 @@ export default function NetworkConnectionStep({
     if (value === "custom") {
       setIsCustomRpcMode(true);
       setSelectedRpc("custom");
-      setRpcHealth(null);
+      // Set to unhealthy by default for custom RPC until user enters and validates
+      setRpcHealth("unhealthy");
     } else {
       setIsCustomRpcMode(false);
       setSelectedRpc(value as RpcOption);
@@ -108,12 +110,16 @@ export default function NetworkConnectionStep({
   };
 
   useEffect(() => {
-    const check = async () => {
-      setRpcHealth("checking");
-      const healthy = await checkRpcHealth(getCurrentRpcUrl());
-      setRpcHealth(healthy ? "healthy" : "unhealthy");
-    };
-    check();
+    // Only auto-check health for non-custom RPCs
+    if (selectedRpc !== "custom") {
+      const check = async () => {
+        setRpcHealth("checking");
+        const healthy = await checkRpcHealth(getCurrentRpcUrl());
+        setRpcHealth(healthy ? "healthy" : "unhealthy");
+      };
+      check();
+    }
+    // For custom RPC, don't auto-check - user must enter and validate manually
   }, [selectedRpc, customRpcUrl, getCurrentRpcUrl]);
 
   const getHealthStatusDisplay = () => {
@@ -166,7 +172,7 @@ export default function NetworkConnectionStep({
           Network Connection Setup
         </h2>
         <p className="text-muted-foreground">
-          Configure RPC endpoint and connect your wallet
+          Configure RPC endpoint for your program
         </p>
       </motion.div>
 
@@ -174,12 +180,12 @@ export default function NetworkConnectionStep({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}
-        className="grid gap-6 md:grid-cols-2"
+        className="max-w-2xl mx-auto"
       >
         {/* RPC Endpoint Configuration Card */}
         <motion.div 
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
           className="overflow-hidden rounded-lg border bg-card/50 shadow-sm"
         >
@@ -243,7 +249,9 @@ export default function NetworkConnectionStep({
                     >
                       <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                       <span>
-                        Unable to connect to this RPC endpoint. Please try a different endpoint or check your network connection.
+                        {selectedRpc === "custom" 
+                          ? "Please enter a custom RPC URL and click Apply to validate the connection."
+                          : "Unable to connect to this RPC endpoint. Please try a different endpoint or check your network connection."}
                       </span>
                     </motion.div>
                   )}
@@ -324,93 +332,6 @@ export default function NetworkConnectionStep({
             </div>
           </div>
         </motion.div>
-
-        {/* Wallet Connection Card */}
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.3 }}
-          className="overflow-hidden rounded-lg border bg-card/50 shadow-sm"
-        >
-          <div className="border-b bg-muted/30 px-6 py-4">
-            <div className="flex items-center gap-2">
-              <Wallet className="h-5 w-5 text-primary" />
-              <h3 className="text-lg font-medium">Wallet Connection</h3>
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Connect wallet to sign transactions
-            </p>
-          </div>
-          <div className="p-6">
-            <AnimatePresence mode="wait">
-              {publicKey ? (
-                <motion.div 
-                  key="connected"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.3 }}
-                  className="flex flex-col gap-4 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900/30 dark:bg-green-900/10"
-                >
-                  <div className="flex items-center gap-3">
-                    <motion.div 
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ type: "spring", stiffness: 200, damping: 15 }}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30"
-                    >
-                      <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-                    </motion.div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-green-800 dark:text-green-400">
-                        Wallet Connected
-                      </div>
-                      <div className="text-xs font-mono text-green-700/70 dark:text-green-500/70 truncate">
-                        {publicKey.toString().slice(0, 8)}...
-                        {publicKey.toString().slice(-8)}
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              ) : (
-                <motion.div 
-                  key="disconnected"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.3 }}
-                  className="flex flex-col gap-4 rounded-lg border border-[var(--border)] bg-[var(--card)] p-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <motion.div 
-                      whileHover={{ scale: 1.05 }}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--muted)]"
-                    >
-                      <Wallet className="h-5 w-5 text-[var(--primary)]" />
-                    </motion.div>
-                    <div>
-                      <div className="font-medium text-[var(--foreground)]">
-                        No Wallet Connected
-                      </div>
-                      <div className="text-xs text-[var(--muted-foreground)]">
-                        Connect your wallet to proceed
-                      </div>
-                    </div>
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    onClick={() => setVisible(true)}
-                    className="w-full border-[var(--border)] bg-[var(--muted)] hover:bg-[var(--accent)] text-[var(--foreground)] transition-colors"
-                  >
-                    <Wallet className="mr-2 h-4 w-4" />
-                    Connect Wallet
-                  </Button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </motion.div>
       </motion.div>
 
       {/* Navigation Controls */}
@@ -429,12 +350,104 @@ export default function NetworkConnectionStep({
           Previous
         </Button>
         <Button
-          onClick={onNext}
-          disabled={!publicKey || rpcHealth !== "healthy"}
+          onClick={async () => {
+            if (rpcHealth !== "healthy") {
+              toast.error("Please ensure RPC endpoint is healthy", {
+                className: "bg-card/95 backdrop-blur-md border-2 border-destructive/30 text-foreground shadow-lg",
+                style: {
+                  background: "hsl(var(--card) / 0.95)",
+                  color: "hsl(var(--foreground))",
+                  borderColor: "hsl(var(--destructive) / 0.3)",
+                  backdropFilter: "blur(12px)",
+                },
+              });
+              return;
+            }
+
+            if (!jsonData?.trim()) {
+              toast.error("IDL data is missing", {
+                className: "bg-card/95 backdrop-blur-md border-2 border-destructive/30 text-foreground shadow-lg",
+                style: {
+                  background: "hsl(var(--card) / 0.95)",
+                  color: "hsl(var(--foreground))",
+                  borderColor: "hsl(var(--destructive) / 0.3)",
+                  backdropFilter: "blur(12px)",
+                },
+              });
+              return;
+            }
+
+            setIsInitializing(true);
+            toast.loading("Initializing program...", { 
+              id: "initialize-program",
+              className: "bg-card/95 backdrop-blur-md border-2 border-primary/30 text-foreground shadow-lg",
+              style: {
+                background: "hsl(var(--card) / 0.95)",
+                color: "hsl(var(--foreground))",
+                borderColor: "hsl(var(--primary) / 0.3)",
+                backdropFilter: "blur(12px)",
+              },
+            });
+
+            try {
+              const parsedIdl = JSON.parse(jsonData);
+              const rpcUrl = getCurrentRpcUrl();
+
+              // Initialize without wallet (will use dummy wallet for read-only operations)
+              await initialize(parsedIdl, rpcUrl, null);
+
+              toast.success("Program initialized", {
+                id: "initialize-program",
+                description: "Your program is now ready for interaction.",
+                duration: 3000,
+                className: "bg-card/95 backdrop-blur-md border-2 border-primary/30 text-foreground shadow-lg",
+                style: {
+                  background: "hsl(var(--card) / 0.95)",
+                  color: "hsl(var(--foreground))",
+                  borderColor: "hsl(var(--primary) / 0.3)",
+                  backdropFilter: "blur(12px)",
+                },
+                descriptionClassName: "text-muted-foreground",
+              });
+
+              resetJsonStore();
+              onNext();
+            } catch (error) {
+              console.error("Program initialization failed:", error);
+              toast.error("Initialization failed", {
+                id: "initialize-program",
+                description:
+                  error instanceof Error
+                    ? error.message
+                    : "An unexpected error occurred during initialization.",
+                duration: 4000,
+                className: "bg-card/95 backdrop-blur-md border-2 border-destructive/30 text-foreground shadow-lg",
+                style: {
+                  background: "hsl(var(--card) / 0.95)",
+                  color: "hsl(var(--foreground))",
+                  borderColor: "hsl(var(--destructive) / 0.3)",
+                  backdropFilter: "blur(12px)",
+                },
+                descriptionClassName: "text-muted-foreground",
+              });
+            } finally {
+              setIsInitializing(false);
+            }
+          }}
+          disabled={rpcHealth !== "healthy" || isInitializing}
           className="min-w-[120px]"
         >
-          Continue
-          <ArrowRight className="ml-2 h-4 w-4" />
+          {isInitializing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Initializing...
+            </>
+          ) : (
+            <>
+              Continue
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </>
+          )}
         </Button>
       </motion.div>
     </motion.div>

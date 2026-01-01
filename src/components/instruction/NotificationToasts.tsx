@@ -43,7 +43,7 @@ export const SuccessToast: React.FC<SuccessToastProps> = ({
                 <span className="text-sm font-medium">Signature:</span>
                 <Button variant="ghost" size="sm" className="h-6 gap-1" asChild>
                   <Link
-                    href={getExplorerUrl(result.signature, "solana", rpcUrl)}
+                    href={getExplorerUrl(result.signature, "helius", rpcUrl)}
                     target="_blank"
                   >
                     <span className="text-xs">View Transaction</span>

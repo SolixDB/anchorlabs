@@ -63,7 +63,7 @@ export function ThemeToggle() {
           variant="ghost"
           size="icon"
           aria-label={`Current theme: ${currentTheme.label}. Click to change theme`}
-          className="relative transition-transform hover:scale-105 active:scale-95"
+          className="relative transition-all hover:scale-105 active:scale-95 theme-toggle-button hover:backdrop-blur-md hover:bg-background/80 hover:border hover:border-border/50 hover:shadow-lg"
         >
           {Icon === IconSolana ? (
             <Icon className="size-5 transition-opacity" />
@@ -73,28 +73,39 @@ export function ThemeToggle() {
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-36">
-        {themes.map((t) => {
-          const ThemeIcon = t.icon;
-          const isSelected = theme === t.value;
-          return (
-            <button
-              key={t.value}
-              onClick={() => handleThemeChange(t.value)}
-              className={`w-full flex items-center gap-2.5 px-2 py-1.5 text-sm rounded-sm transition-colors cursor-pointer ${isSelected
-                ? "bg-accent text-accent-foreground font-medium"
-                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+      <DropdownMenuContent align="end" className="w-36 p-1.5">
+        <div className="flex flex-col gap-1.5">
+          {themes.map((t) => {
+            const ThemeIcon = t.icon;
+            const isSelected = theme === t.value;
+            const isSolana = t.value === "solana";
+            const isCurrentThemeSolana = theme === "solana";
+            return (
+              <button
+                key={t.value}
+                onClick={() => handleThemeChange(t.value)}
+                className={`w-full flex items-center gap-2.5 px-2 py-1.5 text-sm rounded-sm transition-colors cursor-pointer ${
+                  isSelected
+                    ? isSolana
+                      ? "bg-gradient-to-r from-purple-500/20 to-purple-500/10 text-foreground font-medium backdrop-blur-md shadow-sm"
+                      : "bg-accent text-accent-foreground font-medium"
+                    : isCurrentThemeSolana
+                      ? "text-muted-foreground hover:bg-gradient-to-r hover:from-purple-500/20 hover:to-purple-500/10 hover:backdrop-blur-md hover:text-foreground"
+                      : isSolana
+                        ? "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                 }`}
-            >
-              {ThemeIcon === IconSolana ? (
-                <ThemeIcon className="size-4" />
-              ) : (
-                <ThemeIcon className="size-4" />
-              )}
-              <span>{t.label}</span>
-            </button>
-          );
-        })}
+              >
+                {ThemeIcon === IconSolana ? (
+                  <ThemeIcon className="size-4" />
+                ) : (
+                  <ThemeIcon className="size-4" />
+                )}
+                <span>{t.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );

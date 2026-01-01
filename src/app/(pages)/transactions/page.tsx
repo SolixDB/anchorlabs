@@ -1,12 +1,23 @@
 "use client";
 
 import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import useAccountSignatures from "@/hooks/useAccontSignatures";
 import useProgramStore from "@/stores/programStore";
-import { BitcoinIcon, Loader2, SearchIcon } from "lucide-react";
+import { 
+  BitcoinIcon, 
+  Loader2, 
+  SearchIcon, 
+  CheckCircle2, 
+  XCircle, 
+  TrendingUp,
+  Clock
+} from "lucide-react";
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { syne } from "@/fonts/fonts";
 
 const TransactionTable = dynamic(
   () =>
@@ -57,6 +68,15 @@ export default function TransactionsPage() {
       memo: sig.memo,
       status: sig.err ? ("Error" as const) : ("Success" as const),
     })) || [];
+
+  const stats = useMemo(() => {
+    const total = transactions.length;
+    const successful = transactions.filter(tx => tx.status === "Success").length;
+    const failed = transactions.filter(tx => tx.status === "Error").length;
+    const successRate = total > 0 ? ((successful / total) * 100).toFixed(1) : "0";
+    
+    return { total, successful, failed, successRate };
+  }, [transactions]);
 
   if (!programId) {
     return (
@@ -138,54 +158,141 @@ export default function TransactionsPage() {
 
   return (
     <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="w-full max-w-6xl mx-auto p-3 sm:p-4 lg:p-6"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4 }}
+      className="w-full h-full p-6 lg:p-8 overflow-auto bg-gradient-to-b from-background via-background to-muted/20"
     >
-      <div className="space-y-4 sm:space-y-6">
-        <motion.div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <motion.div
-              initial={{ scale: 0, rotate: -180 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{
-                type: "spring",
-                stiffness: 200,
-                damping: 15,
-                delay: 0.1,
-              }}
-              className="rounded-lg bg-primary/10 p-2"
-            >
-              <BitcoinIcon className="h-5 w-5 text-primary" />
-            </motion.div>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                Transactions
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                View and search through transaction history for this program
-              </p>
-            </div>
+      <div className="space-y-6 lg:space-y-8">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="flex items-center gap-4"
+        >
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{
+              delay: 0.2,
+              type: "spring",
+              stiffness: 200,
+              damping: 15,
+            }}
+            className="flex-shrink-0 flex items-center justify-center w-14 h-14 rounded-xl bg-primary/10 border-2 border-primary/20"
+          >
+            <BitcoinIcon className="h-7 w-7 text-primary" />
+          </motion.div>
+          <div>
+            <h1 className={`${syne} text-3xl lg:text-4xl font-bold mb-2`}>
+              Transactions
+            </h1>
+            <p className="text-base text-muted-foreground">
+              View and search through transaction history for this program
+            </p>
           </div>
         </motion.div>
 
-        <motion.div className="w-full max-w-2xl">
+        {/* Stats Cards */}
+        {transactions.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.25 }}
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+          >
+            <motion.div
+              whileHover={{ y: -2 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Card className="bg-card/95 backdrop-blur-sm border-2 border-primary/10 hover:border-primary/20 transition-all duration-300 h-full">
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-muted-foreground">Total</span>
+                    <TrendingUp className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="text-2xl font-bold">{stats.total}</div>
+                  <p className="text-xs text-muted-foreground mt-1">transactions</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div
+              whileHover={{ y: -2 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Card className="bg-card/95 backdrop-blur-sm border-2 border-primary/10 hover:border-primary/20 transition-all duration-300 h-full">
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-muted-foreground">Successful</span>
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  </div>
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.successful}</div>
+                  <p className="text-xs text-muted-foreground mt-1">{stats.successRate}% success rate</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div
+              whileHover={{ y: -2 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Card className="bg-card/95 backdrop-blur-sm border-2 border-primary/10 hover:border-primary/20 transition-all duration-300 h-full">
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-muted-foreground">Failed</span>
+                    <XCircle className="h-4 w-4 text-red-500" />
+                  </div>
+                  <div className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.failed}</div>
+                  <p className="text-xs text-muted-foreground mt-1">errors</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div
+              whileHover={{ y: -2 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Card className="bg-card/95 backdrop-blur-sm border-2 border-primary/10 hover:border-primary/20 transition-all duration-300 h-full">
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-muted-foreground">Success Rate</span>
+                    <Clock className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="text-2xl font-bold">{stats.successRate}%</div>
+                  <p className="text-xs text-muted-foreground mt-1">overall</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Search */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="w-full max-w-2xl"
+        >
           <div className="relative">
-            <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none z-10" />
             <Input
               placeholder="Search by signature, slot, or status..."
-              className="pl-9 h-11 w-full bg-background border-muted shadow-sm transition-all duration-200 focus:shadow-md"
+              className="pl-9 h-11 w-full bg-background/80 backdrop-blur-sm border-2 border-primary/10 shadow-sm transition-all duration-200 focus:shadow-md focus:border-primary/30"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
         </motion.div>
 
+        {/* Transaction Table */}
         <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
           className="w-full"
           layout
-          transition={{ duration: 0.3 }}
         >
           <AnimatePresence mode="wait">
             <motion.div

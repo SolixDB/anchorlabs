@@ -20,6 +20,12 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { Hash } from "lucide-react";
 import { SeedInput } from "@/types";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface PDADialogProps {
   accountName: string;
@@ -44,11 +50,24 @@ export const PDADialog: React.FC<PDADialogProps> = ({
 }) => {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="icon" title="Derive PDA">
-          <Hash className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DialogTrigger asChild>
+              <Button 
+                variant="outline" 
+                className="h-11 px-3 gap-2 font-medium backdrop-blur-sm border-border/50 hover:bg-primary/10 hover:border-primary/30 hover:text-foreground transition-all [.solana_&]:hover:text-white [.solana_&]:hover:[&_*]:text-white"
+              >
+                <Hash className="h-4 w-4" />
+                <span className="text-xs sm:text-sm">Derive PDA</span>
+              </Button>
+            </DialogTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p className="text-xs">Derive Program Derived Address for {accountName}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Derive PDA for {accountName}</DialogTitle>

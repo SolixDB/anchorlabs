@@ -152,7 +152,7 @@ export default function IdlConfigurationStep({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.1 }}
-        className="mb-4"
+        className="mb-6"
       >
         <h2 className="text-2xl font-semibold tracking-tight">
           Program IDL Configuration

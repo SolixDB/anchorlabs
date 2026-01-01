@@ -17,7 +17,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { formatDistanceToNow } from "date-fns";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, SearchIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -82,7 +82,11 @@ export function TransactionTable({ data, filter }: TransactionTableProps) {
   useEffect(() => {
     setIsMounted(true);
     const saved = localStorage.getItem("preferred-explorer") as ExplorerType;
-    if (saved) setExplorer(saved);
+    if (saved && ["solana", "solscan", "solanaFm"].includes(saved)) {
+      setExplorer(saved);
+    } else {
+      setExplorer("solana");
+    }
   }, []);
 
   const handleExplorerChange = (value: ExplorerType) => {
@@ -198,17 +202,17 @@ export function TransactionTable({ data, filter }: TransactionTableProps) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="flex flex-col rounded-xl border shadow-sm bg-card overflow-hidden"
+      className="flex flex-col rounded-xl border-2 border-primary/10 shadow-lg bg-card/95 backdrop-blur-sm overflow-hidden hover:border-primary/20 transition-all duration-300"
     >
       {/* Explorer selector header */}
-      <div className="px-6 py-3 border-b bg-muted/30 flex items-center justify-between">
-        <div className="text-sm font-medium text-muted-foreground">
+      <div className="px-6 py-4 border-b border-primary/10 bg-gradient-to-r from-muted/30 via-muted/20 to-muted/30 flex items-center justify-between">
+        <div className="text-sm font-semibold text-foreground">
           {table.getFilteredRowModel().rows.length} transaction{table.getFilteredRowModel().rows.length !== 1 ? 's' : ''}
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">View on:</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-medium text-muted-foreground">View on:</span>
           <Select value={explorer} onValueChange={handleExplorerChange}>
-            <SelectTrigger className="h-8 w-[140px] text-xs">
+            <SelectTrigger className="h-9 w-[150px] text-xs bg-background/80 backdrop-blur-sm border-2 border-primary/10 hover:border-primary/20">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -225,7 +229,7 @@ export function TransactionTable({ data, filter }: TransactionTableProps) {
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id} className="bg-muted/20 hover:bg-muted/20">
+              <TableRow key={hg.id} className="bg-muted/30 hover:bg-muted/30 border-b border-primary/10">
                 {hg.headers.map((header) => (
                   <TableHead
                     key={header.id}
@@ -248,7 +252,7 @@ export function TransactionTable({ data, filter }: TransactionTableProps) {
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.03, duration: 0.2 }}
-                  className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
+                  className="border-b border-primary/5 transition-colors hover:bg-primary/5 data-[state=selected]:bg-primary/10"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id} className="px-6 py-4">
@@ -264,12 +268,15 @@ export function TransactionTable({ data, filter }: TransactionTableProps) {
               <TableRow>
                 <TableCell
                   colSpan={5}
-                  className="h-32 text-center"
+                  className="h-48 text-center"
                 >
-                  <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                  <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                    <div className="rounded-full bg-muted/50 p-4">
+                      <SearchIcon className="h-6 w-6" />
+                    </div>
                     <p className="text-sm font-medium">No transactions found</p>
                     {filter && (
-                      <p className="text-xs">Try adjusting your search</p>
+                      <p className="text-xs">Try adjusting your search query</p>
                     )}
                   </div>
                 </TableCell>

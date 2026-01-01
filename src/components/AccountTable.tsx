@@ -22,6 +22,7 @@ import {
   Copy,
   Check,
   FileText,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -120,9 +121,10 @@ export type AccountData = {
 interface AccountTableProps {
   data: AccountData[];
   accountType?: IdlTypeDef;
+  onRefresh?: () => void;
 }
 
-export function AccountTable({ data, accountType }: AccountTableProps) {
+export function AccountTable({ data, accountType, onRefresh }: AccountTableProps) {
   const [globalFilter, setGlobalFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
   const [pagination, setPagination] = useState({
@@ -346,57 +348,57 @@ export function AccountTable({ data, accountType }: AccountTableProps) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="flex flex-col rounded-xl border shadow-sm bg-card overflow-hidden"
+      className="flex flex-col space-y-6"
     >
-      {/* Enhanced header with stats */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.1 }}
-        className="px-6 py-4 flex flex-col sm:flex-row sm:items-center gap-4 border-b bg-muted/30"
-      >
+      {/* Simplified header with search and stats */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex-1">
           <div className="relative">
             <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder={`Search ${accountType?.name || "accounts"}...`}
-              className="pl-10 h-10 bg-background border-input shadow-sm focus-visible:ring-2 transition-shadow duration-200"
+              className="pl-10 h-11 bg-card/95 backdrop-blur-sm border-2 border-primary/10 focus:border-primary/20 shadow-sm"
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.target.value)}
             />
           </div>
         </div>
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.15 }}
-          className="flex items-center gap-3"
-        >
-          <div className="flex items-center gap-2 text-sm">
-            <div className="rounded-md bg-primary/10 px-3 py-1.5">
-              <span className="font-semibold text-primary">{totalAccounts}</span>
-              <span className="text-muted-foreground ml-1.5">
-                {totalAccounts === 1 ? "account" : "accounts"}
-              </span>
-            </div>
+        <div className="flex items-center gap-2">
+          {onRefresh && (
+            <Button
+              onClick={onRefresh}
+              variant="outline"
+              size="sm"
+              className="gap-2 h-9"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+          )}
+          <div className="rounded-lg bg-primary/10 border border-primary/20 px-4 py-2">
+            <span className="font-bold text-primary">{totalAccounts}</span>
+            <span className="text-muted-foreground ml-1.5 text-sm">
+              {totalAccounts === 1 ? "account" : "accounts"}
+            </span>
           </div>
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
 
       {/* Table */}
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow
-                key={headerGroup.id}
-                className="border-b bg-muted/20 hover:bg-muted/20"
-              >
-                {headerGroup.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    className="h-12 px-6 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-                  >
+      <div className="rounded-xl border-2 border-primary/10 bg-card/95 backdrop-blur-sm shadow-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow
+                  key={headerGroup.id}
+                  className="border-b-2 border-primary/20 bg-gradient-to-r from-primary/10 to-primary/5 hover:bg-primary/10"
+                >
+                  {headerGroup.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
+                      className="h-14 px-6 text-xs font-bold uppercase tracking-wider text-foreground"
+                    >
                     {header.isPlaceholder ? null : header.column.getCanSort() ? (
                       <div
                         className={cn(
@@ -464,10 +466,10 @@ export function AccountTable({ data, accountType }: AccountTableProps) {
                       delay: Math.min(index * 0.03, 0.3)
                     }}
                     layout
-                    className="border-b hover:bg-muted/50 transition-colors"
+                    className="border-b border-primary/5 hover:bg-muted/60 transition-colors"
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="px-6 py-4">
+                      <TableCell key={cell.id} className="px-6 py-5 text-sm">
                         {flexRender(
                           cell.column.columnDef.cell,
                           cell.getContext()
@@ -500,16 +502,16 @@ export function AccountTable({ data, accountType }: AccountTableProps) {
             </AnimatePresence>
           </TableBody>
         </Table>
-      </div>
+        </div>
 
-      {/* Enhanced pagination */}
-      {table.getPageCount() > 0 && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-          className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t bg-muted/20"
-        >
+        {/* Enhanced pagination */}
+        {table.getPageCount() > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t bg-gradient-to-r from-muted/30 to-muted/20"
+          >
           <div className="flex items-center gap-4">
             <div className="text-sm text-muted-foreground">
               Page <span className="font-medium text-foreground">{table.getState().pagination.pageIndex + 1}</span> of{" "}
@@ -576,7 +578,8 @@ export function AccountTable({ data, accountType }: AccountTableProps) {
             </Button>
           </div>
         </motion.div>
-      )}
+        )}
+      </div>
     </motion.div>
   );
 }

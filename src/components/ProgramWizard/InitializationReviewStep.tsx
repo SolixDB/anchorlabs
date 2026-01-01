@@ -37,30 +37,48 @@ export default function InitializationReviewStep({
       toast.error("Configuration incomplete", {
         description: "IDL data is missing. Please go back and configure it.",
         duration: 3000,
+        className: "bg-card/95 backdrop-blur-md border-2 border-destructive/30 text-foreground shadow-lg",
+        style: {
+          background: "hsl(var(--card) / 0.95)",
+          color: "hsl(var(--foreground))",
+          borderColor: "hsl(var(--destructive) / 0.3)",
+          backdropFilter: "blur(12px)",
+        },
+        descriptionClassName: "text-muted-foreground",
       });
       return;
     }
 
-    if (!wallet?.publicKey) {
-      toast.error("Wallet not connected", {
-        description: "Please connect your wallet to initialize the program.",
-        duration: 3000,
-      });
-      return;
-    }
-
-    toast.loading("Initializing program...", { id: "initialize-program" });
+    toast.loading("Initializing program...", { 
+      id: "initialize-program",
+      className: "bg-card/95 backdrop-blur-md border-2 border-primary/30 text-foreground shadow-lg",
+      style: {
+        background: "hsl(var(--card) / 0.95)",
+        color: "hsl(var(--foreground))",
+        borderColor: "hsl(var(--primary) / 0.3)",
+        backdropFilter: "blur(12px)",
+      },
+    });
 
     try {
       const parsedIdl = JSON.parse(jsonData);
       const rpcUrl = getCurrentRpcUrl();
 
-      await initialize(parsedIdl, rpcUrl, wallet);
+      // Initialize without wallet (will use dummy wallet for read-only operations)
+      await initialize(parsedIdl, rpcUrl, wallet || null);
 
       toast.success("Program initialized", {
         id: "initialize-program",
         description: "Your program is now ready for interaction.",
         duration: 5000,
+        className: "bg-card/95 backdrop-blur-md border-2 border-primary/30 text-foreground shadow-lg",
+        style: {
+          background: "hsl(var(--card) / 0.95)",
+          color: "hsl(var(--foreground))",
+          borderColor: "hsl(var(--primary) / 0.3)",
+          backdropFilter: "blur(12px)",
+        },
+        descriptionClassName: "text-muted-foreground",
       });
 
       resetJsonStore();
@@ -77,6 +95,14 @@ export default function InitializationReviewStep({
             ? error.message
             : "An unexpected error occurred during initialization.",
         duration: 4000,
+        className: "bg-card/95 backdrop-blur-md border-2 border-destructive/30 text-foreground shadow-lg",
+        style: {
+          background: "hsl(var(--card) / 0.95)",
+          color: "hsl(var(--foreground))",
+          borderColor: "hsl(var(--destructive) / 0.3)",
+          backdropFilter: "blur(12px)",
+        },
+        descriptionClassName: "text-muted-foreground",
       });
     }
   };
@@ -317,16 +343,16 @@ export default function InitializationReviewStep({
                   >
                     <Wallet className="h-5 w-5 text-primary" />
                   </motion.div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-muted-foreground">
-                      Connected Wallet
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-muted-foreground">
+                        Wallet Connection
+                      </div>
+                      <div className="font-medium font-mono truncate">
+                        {wallet?.publicKey
+                          ? `${wallet.publicKey.toString().slice(0, 8)}...${wallet.publicKey.toString().slice(-8)}`
+                          : "Optional (connect when executing transactions)"}
+                      </div>
                     </div>
-                    <div className="font-medium font-mono truncate">
-                      {wallet?.publicKey
-                        ? `${wallet.publicKey.toString().slice(0, 8)}...${wallet.publicKey.toString().slice(-8)}`
-                        : "Not connected"}
-                    </div>
-                  </div>
                 </motion.div>
               </div>
             </div>
@@ -350,7 +376,7 @@ export default function InitializationReviewStep({
           </Button>
           <Button
             onClick={handleInitialization}
-            disabled={!isValid || !jsonData.trim() || !wallet?.publicKey}
+            disabled={!isValid || !jsonData.trim()}
             size="lg"
             className="gap-2 min-w-[160px]"
           >

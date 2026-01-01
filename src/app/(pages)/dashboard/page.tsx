@@ -2,6 +2,22 @@
 
 import ProgramNotFound from "@/components/ProgramNotFound";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAutoReinitialize } from "@/hooks/useAutoReinitialize";
 import useProgramStore from "@/stores/programStore";
 import { useAnchorWallet } from "@solana/wallet-adapter-react";
@@ -14,20 +30,27 @@ import {
   Database,
   Globe,
   LayoutGrid,
-  ServerIcon
+  ServerIcon,
+  FlaskConical,
+  Settings,
+  AlertTriangle
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { syne } from "@/fonts/fonts";
 
 export default function Dashboard() {
   const [copiedId, setCopiedId] = useState(false);
   const [copiedRpc, setCopiedRpc] = useState(false);
-  const [showIdl, setShowIdl] = useState(false);
+  const [showIdlDialog, setShowIdlDialog] = useState(false);
   const [idlCopied, setIdlCopied] = useState(false);
-  const { programDetails } = useProgramStore()
+  const [showReconfigureDialog, setShowReconfigureDialog] = useState(false);
+  const { programDetails, reset } = useProgramStore();
   const wallet = useAnchorWallet();
-  useAutoReinitialize(wallet);
+  const router = useRouter();
+  useAutoReinitialize(wallet ?? undefined);
 
   const idlJson = programDetails?.serializedIdl
     ? JSON.stringify(JSON.parse(programDetails.serializedIdl), null, 2)
@@ -42,6 +65,12 @@ export default function Dashboard() {
     setTimeout(() => setter(false), 2000);
   };
 
+  const handleReconfigure = () => {
+    reset();
+    setShowReconfigureDialog(false);
+    router.push("/?setup=true");
+  };
+
   if (!programDetails) {
     return <ProgramNotFound />
   }
@@ -51,16 +80,15 @@ export default function Dashboard() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.4 }}
-      className="w-full h-full p-6 lg:p-8 overflow-auto"
+      className="w-full h-full p-6 lg:p-8 overflow-auto bg-gradient-to-b from-background via-background to-muted/20"
     >
-      {/* Program Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
         className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-8"
       >
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-1">
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
@@ -70,23 +98,23 @@ export default function Dashboard() {
               stiffness: 200,
               damping: 15
             }}
-            className="flex-shrink-0 flex items-center justify-center w-14 h-14 rounded-lg bg-primary/10 border border-primary/20"
+            className="flex-shrink-0 flex items-center justify-center w-16 h-16 rounded-xl bg-primary/10 border-2 border-primary/20"
           >
-            <Code className="h-7 w-7 text-primary" />
+            <Code className="h-8 w-8 text-primary" />
           </motion.div>
           <div>
-            <h1 className="text-2xl font-bold mb-1">
+            <h1 className={`${syne} text-3xl lg:text-4xl font-bold mb-2`}>
               {programDetails.name}
             </h1>
             <div className="flex items-center gap-3 flex-wrap">
-              <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-secondary text-secondary-foreground">
+              <span className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
                 {programDetails.cluster}
               </span>
               <div className="hidden sm:block w-px h-4 bg-muted"></div>
               <div className="text-sm text-muted-foreground flex items-center gap-1.5">
                 <span>Initialized</span>
                 <span
-                  className="font-mono"
+                  className="font-mono font-medium"
                   title={new Date(programDetails.initializedAt).toLocaleString()}
                 >
                   {formatDistanceToNow(new Date(programDetails.initializedAt), {
@@ -97,19 +125,86 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+        <motion.div
+          initial={{ opacity: 0, x: 10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowReconfigureDialog(true)}
+            className="gap-2 text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20"
+          >
+            <Settings className="h-4 w-4" />
+            Reconfigure
+          </Button>
+        </motion.div>
       </motion.div>
 
-      {/* Main Grid - 2x3 layout */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
-        {/* Program ID Card */}
+      <AlertDialog open={showReconfigureDialog} onOpenChange={setShowReconfigureDialog}>
+        <AlertDialogContent className="border-destructive/50">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-destructive/10">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              </div>
+              <AlertDialogTitle className="text-destructive">
+                Reconfigure Program?
+              </AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="text-base pt-2">
+              This will reset your current program configuration and all associated data. 
+              You&apos;ll need to set up a new program IDL and RPC endpoint.
+              <br />
+              <br />
+              <strong className="text-foreground">This action cannot be undone.</strong>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleReconfigure}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Yes, Reconfigure
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={showIdlDialog} onOpenChange={setShowIdlDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Complete IDL</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto relative">
+            <button
+              className="absolute top-3 right-3 z-10 text-xs bg-background px-3 py-1.5 rounded-md hover:bg-muted border shadow-sm"
+              onClick={async () => {
+                await navigator.clipboard.writeText(idlJson);
+                setIdlCopied(true);
+                setTimeout(() => setIdlCopied(false), 2000);
+              }}
+            >
+              {idlCopied ? "Copied" : "Copy"}
+            </button>
+            <pre className="bg-muted rounded-lg p-5 text-xs font-mono overflow-x-auto border">
+              {idlJson}
+            </pre>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-6">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={{ delay: 0.25 }}
-          className="bg-card border rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+          className="bg-card/95 backdrop-blur-sm border-2 border-primary/10 rounded-xl p-5 shadow-lg hover:shadow-xl hover:border-primary/20 transition-all duration-300 h-full flex flex-col"
         >
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between mb-3.5">
+            <div className="flex items-center gap-2.5">
               <motion.div
                 whileHover={{ scale: 1.05 }}
                 className="p-2 rounded-lg bg-primary/10"
@@ -153,51 +248,27 @@ export default function Dashboard() {
               </AnimatePresence>
             </Button>
           </div>
-          <div className="font-mono text-sm bg-muted rounded-lg p-4 overflow-x-auto whitespace-nowrap mb-4">
+          <div className="font-mono text-sm bg-muted rounded-lg p-3.5 overflow-x-auto whitespace-nowrap mb-3.5 flex-1 flex items-center">
             {programDetails.programId}
           </div>
-          <button
-            className="text-sm font-medium text-primary hover:text-primary/80 transition-colors underline"
-            onClick={() => setShowIdl((v) => !v)}
-          >
-            {showIdl ? "Hide IDL" : "View Complete IDL"}
-          </button>
-          <AnimatePresence>
-            {showIdl && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.3 }}
-                className="mt-4 relative overflow-hidden"
-              >
-                <button
-                  className="absolute top-3 right-3 z-10 text-xs bg-background px-3 py-1.5 rounded-md hover:bg-muted border shadow-sm"
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(idlJson);
-                    setIdlCopied(true);
-                    setTimeout(() => setIdlCopied(false), 2000);
-                  }}
-                >
-                  {idlCopied ? "Copied" : "Copy"}
-                </button>
-                <pre className="bg-muted rounded-lg p-5 text-xs font-mono overflow-x-auto max-h-96 border">
-                  {idlJson}
-                </pre>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <div className="mt-auto">
+            <button
+              className="text-sm font-medium text-primary hover:text-primary/80 transition-colors underline"
+              onClick={() => setShowIdlDialog(true)}
+            >
+              View Complete IDL
+            </button>
+          </div>
         </motion.div>
 
-        {/* RPC Endpoint Card */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
-          className="bg-card border rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+          className="bg-card/95 backdrop-blur-sm border-2 border-primary/10 rounded-xl p-5 shadow-lg hover:shadow-xl hover:border-primary/20 transition-all duration-300"
         >
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between mb-3.5">
+            <div className="flex items-center gap-2.5">
               <motion.div
                 whileHover={{ scale: 1.05 }}
                 className="p-2 rounded-lg bg-primary/10"
@@ -241,10 +312,10 @@ export default function Dashboard() {
               </AnimatePresence>
             </Button>
           </div>
-          <div className="font-mono text-sm bg-muted rounded-lg p-4 overflow-x-auto whitespace-nowrap">
+          <div className="font-mono text-sm bg-muted rounded-lg p-3.5 overflow-x-auto whitespace-nowrap">
             {programDetails.rpcUrl}
           </div>
-          <div className="mt-6 space-y-3">
+          <div className="mt-5 space-y-2.5">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Commitment Level</span>
               <span className="font-medium">{programDetails.commitment}</span>
@@ -256,137 +327,148 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        {/* Accounts Card */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={{ delay: 0.35 }}
         >
           <Link href="/accounts" className="block group">
-            <div className="bg-card border rounded-xl p-6 shadow-sm hover:shadow-lg transition-all h-full cursor-pointer hover:border-primary/50">
-              <div className="flex items-start justify-between mb-4">
+            <motion.div
+              whileHover={{ y: -4 }}
+              className="bg-card/95 backdrop-blur-sm border-2 border-primary/10 rounded-xl p-5 shadow-lg hover:shadow-xl hover:border-primary/30 transition-all duration-300 h-full cursor-pointer"
+            >
+              <div className="flex items-start justify-between mb-3.5">
                 <div className="flex items-center gap-3">
                   <motion.div
-                    whileHover={{ scale: 1.1, rotate: 5 }}
-                    className="p-2 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors"
+                    whileHover={{ scale: 1.15, rotate: 5 }}
+                    className="p-2.5 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20 group-hover:from-primary/30 group-hover:to-primary/20 transition-all"
                   >
                     <LayoutGrid className="h-5 w-5 text-primary" />
                   </motion.div>
                   <div>
-                    <h3 className="text-base font-semibold mb-1">Accounts</h3>
+                    <h3 className="text-lg font-bold mb-1">Accounts</h3>
                     <p className="text-sm text-muted-foreground">
                       View and manage program accounts
                     </p>
                   </div>
                 </div>
-                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-2 transition-all" />
               </div>
-              <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-                <div className="text-xs text-muted-foreground mb-1">Quick Access</div>
-                <div className="text-sm font-medium">Browse all program accounts and their data</div>
+              <div className="mt-5 p-3.5 bg-gradient-to-br from-muted/60 to-muted/40 rounded-lg border border-primary/5">
+                <div className="text-xs text-muted-foreground mb-1 font-medium">Quick Access</div>
+                <div className="text-sm font-semibold">Browse all program accounts and their data</div>
               </div>
-            </div>
+            </motion.div>
           </Link>
         </motion.div>
 
-        {/* Instructions Card */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={{ delay: 0.4 }}
         >
           <Link href="/instructions" className="block group">
-            <div className="bg-card border rounded-xl p-6 shadow-sm hover:shadow-lg transition-all h-full cursor-pointer hover:border-primary/50">
-              <div className="flex items-start justify-between mb-4">
+            <motion.div
+              whileHover={{ y: -4 }}
+              className="bg-card/95 backdrop-blur-sm border-2 border-primary/10 rounded-xl p-5 shadow-lg hover:shadow-xl hover:border-primary/30 transition-all duration-300 h-full cursor-pointer"
+            >
+              <div className="flex items-start justify-between mb-3.5">
                 <div className="flex items-center gap-3">
                   <motion.div
-                    whileHover={{ scale: 1.1, rotate: -5 }}
-                    className="p-2 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors"
+                    whileHover={{ scale: 1.15, rotate: -5 }}
+                    className="p-2.5 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20 group-hover:from-primary/30 group-hover:to-primary/20 transition-all"
                   >
                     <Code className="h-5 w-5 text-primary" />
                   </motion.div>
                   <div>
-                    <h3 className="text-base font-semibold mb-1">Instructions</h3>
+                    <h3 className="text-lg font-bold mb-1">Instructions</h3>
                     <p className="text-sm text-muted-foreground">
                       View and execute program instructions
                     </p>
                   </div>
                 </div>
-                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-2 transition-all" />
               </div>
-              <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-                <div className="text-xs text-muted-foreground mb-1">Quick Access</div>
-                <div className="text-sm font-medium">Execute and test program instructions</div>
+              <div className="mt-5 p-3.5 bg-gradient-to-br from-muted/60 to-muted/40 rounded-lg border border-primary/5">
+                <div className="text-xs text-muted-foreground mb-1 font-medium">Quick Access</div>
+                <div className="text-sm font-semibold">Execute and test program instructions</div>
               </div>
-            </div>
+            </motion.div>
           </Link>
         </motion.div>
 
-        {/* PDA Derivation Card */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={{ delay: 0.45 }}
-          className="xl:col-span-2"
         >
-          <Link href="/pda" className="block group">
-            <div className="bg-card border rounded-xl p-6 shadow-sm hover:shadow-lg transition-all h-full cursor-pointer hover:border-primary/50">
-              <div className="flex items-start justify-between mb-4">
+          <Link href="/test-suites" className="block group">
+            <motion.div
+              whileHover={{ y: -4 }}
+              className="bg-card/95 backdrop-blur-sm border-2 border-primary/10 rounded-xl p-5 shadow-lg hover:shadow-xl hover:border-primary/30 transition-all duration-300 h-full cursor-pointer"
+            >
+              <div className="flex items-start justify-between mb-3.5">
                 <div className="flex items-center gap-3">
                   <motion.div
-                    whileHover={{ scale: 1.1 }}
-                    className="p-2 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors"
+                    whileHover={{ scale: 1.15, rotate: 5 }}
+                    className="p-2.5 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20 group-hover:from-primary/30 group-hover:to-primary/20 transition-all"
+                  >
+                    <FlaskConical className="h-5 w-5 text-primary" />
+                  </motion.div>
+                  <div>
+                    <h3 className="text-lg font-bold mb-1">Test Suites</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Create and manage test suites for your program
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-2 transition-all" />
+              </div>
+              <div className="mt-5 p-3.5 bg-gradient-to-br from-muted/60 to-muted/40 rounded-lg border border-primary/5">
+                <div className="text-xs text-muted-foreground mb-1 font-medium">Quick Access</div>
+                <div className="text-sm font-semibold">
+                  Organize and execute test cases
+                </div>
+              </div>
+            </motion.div>
+          </Link>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+        >
+          <Link href="/transactions" className="block group">
+            <motion.div
+              whileHover={{ y: -4 }}
+              className="bg-card/95 backdrop-blur-sm border-2 border-primary/10 rounded-xl p-5 shadow-lg hover:shadow-xl hover:border-primary/30 transition-all duration-300 h-full cursor-pointer flex flex-col"
+            >
+              <div className="flex items-start justify-between mb-3.5">
+                <div className="flex items-center gap-3">
+                  <motion.div
+                    whileHover={{ scale: 1.15, rotate: 5 }}
+                    className="p-2.5 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20 group-hover:from-primary/30 group-hover:to-primary/20 transition-all"
                   >
                     <Database className="h-5 w-5 text-primary" />
                   </motion.div>
                   <div>
-                    <h3 className="text-base font-semibold mb-1">PDA Derivation</h3>
+                    <h3 className="text-lg font-bold mb-1">Transactions</h3>
                     <p className="text-sm text-muted-foreground">
-                      Derive program addresses using custom seeds
+                      View recent transactions and their status
                     </p>
                   </div>
                 </div>
-                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-2 transition-all" />
               </div>
-              <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-                <div className="text-xs text-muted-foreground mb-1">Quick Access</div>
-                <div className="text-sm font-medium">
-                  Compute PDAs for your Solana program
-                </div>
+              <div className="mt-auto p-3.5 bg-gradient-to-br from-muted/60 to-muted/40 rounded-lg border border-primary/5">
+                <div className="text-xs text-muted-foreground mb-1 font-medium">Quick Access</div>
+                <div className="text-sm font-semibold">Browse transaction history and status</div>
               </div>
-            </div>
+            </motion.div>
           </Link>
         </motion.div>
       </div>
-
-      {/* Transactions Card - Full Width */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-      >
-        <Link href="/transactions" className="block group">
-          <div className="bg-card border rounded-xl p-6 shadow-sm hover:shadow-lg transition-all cursor-pointer hover:border-primary/50">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <motion.div
-                  whileHover={{ scale: 1.1, rotate: 5 }}
-                  className="p-3 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors"
-                >
-                  <Database className="h-6 w-6 text-primary" />
-                </motion.div>
-                <div>
-                  <h3 className="text-lg font-semibold mb-1">Transactions</h3>
-                  <p className="text-sm text-muted-foreground">
-                    View recent transactions and their status
-                  </p>
-                </div>
-              </div>
-              <ArrowRight className="h-6 w-6 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
-            </div>
-          </div>
-        </Link>
-      </motion.div>
     </motion.div>
   );
 }

@@ -60,7 +60,7 @@ export const ArgumentInput: React.FC<ArgumentInputProps> = ({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.15 + index * 0.05 }}
-      className="space-y-2 bg-muted/40 p-4 rounded-lg"
+      className="space-y-2.5 bg-muted/40 p-4 rounded-lg"
     >
       <div className="flex items-center justify-between">
         <Label htmlFor={`arg-${name}`} className="font-medium">
@@ -103,7 +103,7 @@ export const ArgumentInput: React.FC<ArgumentInputProps> = ({
           value={value as string | number | readonly string[] | undefined}
           onChange={onChange}
           placeholder={`Enter ${name}`}
-          className="mt-1.5 transition-all duration-200 focus-within:shadow-sm"
+          className="mt-1.5 h-11 transition-all duration-200 focus-within:shadow-sm"
         />
       )}
     </motion.div>

@@ -14,15 +14,19 @@ export function JsonEditor({ onChange }: JsonEditorProps) {
   const [code, setCode] = useState(jsonData);
   const [errorMessage, setErrorMessage] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lastSyncedJsonData = useRef(jsonData);
+  const isInternalUpdate = useRef(false);
 
-  // Initialize from store
+  // Sync from store only when jsonData changes externally (not from our updates)
   useEffect(() => {
-    if (jsonData !== code) {
+    // Only sync if jsonData changed from an external source
+    if (jsonData !== lastSyncedJsonData.current && !isInternalUpdate.current) {
+      lastSyncedJsonData.current = jsonData;
       setCode(jsonData);
     }
-  }, [jsonData, code]);
+  }, [jsonData]);
 
-  // Validate JSON and update store
+  // Validate JSON and update store when user types
   useEffect(() => {
     let currentIsValid = true;
     let currentErrorMessage = "";
@@ -45,14 +49,22 @@ export function JsonEditor({ onChange }: JsonEditorProps) {
     setIsValid(currentIsValid);
     setErrorMessage(currentErrorMessage);
 
-    // Update store
-    setJsonData(code);
+    // Update store only if code differs from current store value
+    if (jsonData !== code) {
+      isInternalUpdate.current = true;
+      setJsonData(code);
+      lastSyncedJsonData.current = code;
+      // Reset flag after a brief delay
+      setTimeout(() => {
+        isInternalUpdate.current = false;
+      }, 0);
+    }
 
     // Call onChange if provided
     if (onChange) {
       onChange(code, currentIsValid);
     }
-  }, [code, onChange, setIsValid, setJsonData]);
+  }, [code, onChange, setIsValid, setJsonData, jsonData]);
 
   const formatJson = () => {
     try {

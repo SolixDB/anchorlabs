@@ -10,6 +10,8 @@ import {
   IconListDetails,
   IconTestPipe,
 } from "@tabler/icons-react";
+import { Code2 } from "lucide-react";
+import { motion } from "framer-motion";
 
 import {
   Sidebar,
@@ -23,7 +25,6 @@ import {
 } from "@/components/ui/sidebar";
 import { syne } from "@/fonts/fonts";
 
-// Navigation configuration
 const NAV_ITEMS = [
   {
     title: "Dashboard",
@@ -50,39 +51,38 @@ const NAV_ITEMS = [
     url: "/transactions",
     icon: IconChartBar,
   },
-  {
-    title: "PDAs",
-    url: "/pda",
-    icon: IconDatabase,
-  },
-  // {
-  //   title: "Test Generation",
-  //   url: "/test-generation",
-  //   icon: WrenchIcon,
-  // },
 ] as const;
 
-// Main Sidebar Component
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
-    <Sidebar collapsible="offcanvas" {...props}>
-      <SidebarHeader>
+    <Sidebar collapsible="offcanvas" variant="inset" {...props}>
+      <SidebarHeader className="border-b border-primary/10 bg-gradient-to-b from-background to-muted/20">
         <SidebarMenu>
           <SidebarMenuItem>
-            <Link href="/" className="flex items-center gap-3">
-              <span className={`text-2xl font-bold ${syne}`}>AnchorLabs</span>
+            <Link href="/" className="flex items-center gap-3 group">
+              <motion.div
+                whileHover={{ scale: 1.1, rotate: 5 }}
+                className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 group-hover:bg-primary/20 transition-colors"
+              >
+                <Code2 className="h-5 w-5 text-primary" />
+              </motion.div>
+              <div className="flex flex-col">
+                <span className={`text-xl font-bold ${syne} bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent`}>
+                  AnchorLabs
+                </span>
+                <span className="text-xs text-muted-foreground">DevTool</span>
+              </div>
             </Link>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="bg-gradient-to-b from-background via-background to-muted/10">
         <NavMain items={NAV_ITEMS} />
       </SidebarContent>
     </Sidebar>
   );
 }
 
-// Navigation Menu Component
 function NavMain({
   items,
 }: {
@@ -109,10 +109,12 @@ function NavMain({
                   asChild
                   tooltip={item.title}
                   isActive={isActive}
+                  size="lg"
+                  className="h-12"
                 >
                   <Link href={item.url} className="flex items-center gap-3">
                     {item.icon && <item.icon className="h-5 w-5" />}
-                    <span>{item.title}</span>
+                    <span className="text-base font-medium">{item.title}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

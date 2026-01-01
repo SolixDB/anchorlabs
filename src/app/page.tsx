@@ -29,10 +29,10 @@ import { IconCheck, IconRocket, IconSettings } from "@tabler/icons-react";
 import { Code2, CheckCircle2, ArrowRight, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { syne } from "@/fonts/fonts";
 
-export default function HomePage() {
+function HomePageContent() {
   const {
     isInitialized,
     program,
@@ -56,6 +56,26 @@ export default function HomePage() {
   }, []);
 
   useAutoReinitialize(wallet ?? undefined);
+
+  // Auto-initialize with dummy wallet if we have programDetails
+  useEffect(() => {
+    if (programDetails && !program && !isInitialized && !isReinitializing) {
+      const initializeProgram = async () => {
+        try {
+          const idl = JSON.parse(programDetails.serializedIdl);
+          await initialize(
+            idl,
+            programDetails.rpcUrl,
+            null, // No wallet needed for read-only initialization
+            programDetails.commitment
+          );
+        } catch (error) {
+          console.error("Auto-initialization failed:", error);
+        }
+      };
+      initializeProgram();
+    }
+  }, [programDetails, program, isInitialized, isReinitializing, initialize]);
 
   const handleReset = () => {
     reset();
@@ -127,26 +147,6 @@ export default function HomePage() {
 
   // CASE 2: Have programDetails but not yet initialized → auto-initialize with dummy wallet
   if (!program || !isInitialized) {
-    // Auto-initialize with dummy wallet if we have programDetails
-    useEffect(() => {
-      if (programDetails && !program && !isReinitializing) {
-        const initializeProgram = async () => {
-          try {
-            const idl = JSON.parse(programDetails.serializedIdl);
-            await initialize(
-              idl,
-              programDetails.rpcUrl,
-              null, // No wallet needed for read-only initialization
-              programDetails.commitment
-            );
-          } catch (error) {
-            console.error("Auto-initialization failed:", error);
-          }
-        };
-        initializeProgram();
-      }
-    }, [programDetails, program, isReinitializing, initialize]);
-
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -344,5 +344,13 @@ export default function HomePage() {
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<WelcomeAnimation />}>
+      <HomePageContent />
+    </Suspense>
   );
 }
